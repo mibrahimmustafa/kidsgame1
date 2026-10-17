@@ -10,11 +10,19 @@ import 'world.dart';
 /// every car, coin, cloud and hill is drawn with paths/gradients,
 /// so the game is razor-sharp "HD" on any Android DPI.
 class RacePainter extends CustomPainter {
-  RacePainter(this.world, this.theme, this.tick);
+  RacePainter(
+    this.world,
+    this.theme,
+    this.tick, {
+    this.bodyStyle = BodyStyle.classic,
+    this.mods = const <String>{},
+  });
 
   final GameWorld world;
   final TrackTheme theme;
   final double tick;
+  final BodyStyle bodyStyle;
+  final Set<String> mods;
 
   // geometry fractions
   static const double _skyFrac = 0.17;
@@ -470,88 +478,361 @@ class RacePainter extends CustomPainter {
     double tilt = 0,
     bool boostFlames = false,
     bool isPlayer = false,
+    BodyStyle bodyStyle = BodyStyle.classic,
+    Set<String> mods = const <String>{},
   }) {
     final center = at.translate(0, bob);
-    // facing: left = traffic (toward player), right = player direction.
+    final s = scale;
+    // ---- per-body proportions ----
+    var lFac = 1.0;
+    var wFac = 1.0;
+    var wheelLen = 12.0;
+    var wheelWide = 5.5;
+    var wheelOut = 0.50; // fraction of W where tires peek
+    switch (bodyStyle) {
+      case BodyStyle.classic:
+        lFac = 1.0;
+        wFac = 1.0;
+      case BodyStyle.sport:
+        lFac = 1.12;
+        wFac = 0.88;
+        wheelLen = 11;
+        wheelWide = 5;
+        wheelOut = 0.47;
+      case BodyStyle.muscle:
+        lFac = 1.05;
+        wFac = 1.10;
+        wheelLen = 13;
+        wheelWide = 6;
+        wheelOut = 0.52;
+      case BodyStyle.monster:
+        lFac = 0.94;
+        wFac = 1.10;
+        wheelLen = 18;
+        wheelWide = 7.5;
+        wheelOut = 0.58;
+    }
+    final L = 56 * s * lFac;
+    final W = 30 * s * wFac;
+    final hasSpoiler = mods.contains('spoiler') || bodyStyle != BodyStyle.classic;
+    final twinExhaust = mods.contains('exhaust');
+    final hasNeon = mods.contains('neon');
+    final hasStripes = mods.contains('stripes');
+    final hasFlag = mods.contains('flag');
+    final hasRoundel = mods.contains('roundel');
+    final hasLightbar = mods.contains('lightbar');
+    final hasAntenna = mods.contains('antenna');
+
     c.save();
     c.translate(center.dx, center.dy);
     if (facingLeft) c.rotate(math.pi);
     if (tilt != 0) c.rotate(tilt);
-    final scaleF = scale;
-    final L = 54 * scaleF; // length along +x (facing direction)
-    final W = 30 * scaleF;
 
-    // shadow
+    // ---- ground shadow (two soft layers) ----
     c.drawOval(
         Rect.fromCenter(
-            center: Offset(-2 * scaleF, W * 0.42),
-            width: L * 1.02,
-            height: W * 0.56),
-        _fill(const Color(0x42000000)));
+            center: const Offset(-2, 2) * s,
+            width: L * 1.06,
+            height: W * 0.60),
+        _fill(const Color(0x30000000)));
+    c.drawOval(
+        Rect.fromCenter(
+            center: Offset(-1 * s, W * 0.34),
+            width: L * 0.92,
+            height: W * 0.42),
+        _fill(const Color(0x36000000)));
 
+    // ---- neon underglow (mod: boosted edition) ----
+    if (hasNeon) {
+      c.drawOval(
+          Rect.fromCenter(
+              center: Offset.zero, width: L * 1.35, height: W * 1.15),
+          _fill(const Color(0xFF7C4DFF), alpha: 0.30 + 0.10 * math.sin(tick * 6)));
+    } else if (isPlayer) {
+      c.drawOval(
+          Rect.fromCenter(
+              center: Offset.zero, width: L * 1.16, height: W * 0.9),
+          _fill(accent, alpha: 0.14));
+    }
+
+    // ---- tire "stubs" peeking out of the body ----
+    for (final wx in [-L * 0.295, L * 0.295]) {
+      for (final wy in [-1.0, 1.0]) {
+        c.drawRRect(
+            RRect.fromRectAndRadius(
+                Rect.fromCenter(
+                    center: Offset(wx, wy * W * wheelOut),
+                    width: wheelLen * s * (wheelWide / 5.5),
+                    height: wheelWide * s * (wheelWide / 5.5) * 0.95),
+                Radius.circular(2.6 * s)),
+            _fill(const Color(0xFF191C21)));
+      }
+    }
+
+    // ---- booster flames (under the body, at the tail) ----
     if (boostFlames) {
-      final flick = 6 + math.sin(_rngseed() * 40) * 3;
-      final flame = Path()
-        ..moveTo(-L * 0.56, -W * 0.16)
-        ..relativeLineTo(-flick * scaleF, 0)
-        ..relativeLineTo(flick * 0.5 * scaleF, W * 0.09)
-        ..relativeLineTo(-flick * 0.6 * scaleF, W * 0.07)
-        ..close();
-      c.drawPath(flame, _fill(const Color(0xFFFFB300), alpha: 0.9));
-      c.drawPath(flame, _fill(const Color(0xFFFF7043), alpha: 0.85));
+      final flick = 0.8 + 0.25 * math.sin(_rngseed() * 40);
+      final flameScale = twinExhaust ? 1.35 : 1.0;
+      for (final wy in [-0.16, 0.16]) {
+        final tip = Offset(-L * 0.5 - 16 * s * flick * flameScale, W * wy);
+        final flame = Path()
+          ..moveTo(-L * 0.50, W * wy - 2.6 * s)
+          ..quadraticBezierTo(
+              -L * 0.62, W * wy, tip.dx, tip.dy)
+          ..quadraticBezierTo(
+              -L * 0.62, W * wy, -L * 0.50, W * wy + 2.6 * s)
+          ..close();
+        c.drawPath(flame, _fill(const Color(0xFFFF7043), alpha: 0.85));
+        c.drawPath(flame, _fill(const Color(0xFFFFE082), alpha: 0.8));
+      }
+      if (twinExhaust) {
+        for (final wy in [-0.30, 0.30]) {
+          c.drawCircle(Offset(-L * 0.52, W * wy), 2.0 * s,
+              _fill(const Color(0xFF455A64)));
+        }
+      }
     }
 
-    // body
+    // ---- body silhouette (per-style taper) ----
+    final bodyPath = (() {
+      final p = Path()
+        ..moveTo(-L * 0.50, -W * 0.34)
+        ..lineTo(-L * 0.36, -W * 0.48);
+      if (bodyStyle == BodyStyle.monster) {
+        p
+          ..lineTo(L * 0.16, -W * 0.50)
+          ..quadraticBezierTo(L * 0.46, -W * 0.46, L * 0.46, -W * 0.12)
+          ..lineTo(L * 0.46, W * 0.12)
+          ..quadraticBezierTo(L * 0.46, W * 0.46, L * 0.16, W * 0.50)
+          ..lineTo(-L * 0.36, W * 0.48)
+          ..quadraticBezierTo(-L * 0.50, W * 0.44, -L * 0.50, W * 0.34);
+      } else if (bodyStyle == BodyStyle.muscle) {
+        p
+          ..lineTo(L * 0.24, -W * 0.50)
+          ..quadraticBezierTo(L * 0.50, -W * 0.46, L * 0.50, -W * 0.18)
+          ..lineTo(L * 0.50, W * 0.18)
+          ..quadraticBezierTo(L * 0.50, W * 0.46, L * 0.24, W * 0.50)
+          ..lineTo(-L * 0.36, W * 0.48)
+          ..quadraticBezierTo(-L * 0.50, W * 0.44, -L * 0.50, W * 0.34);
+      } else {
+        p
+          ..lineTo(L * 0.28, -W * 0.48)
+          ..quadraticBezierTo(L * 0.50, -W * 0.44, L * 0.50, -W * 0.14)
+          ..lineTo(L * 0.50, W * 0.14)
+          ..quadraticBezierTo(L * 0.50, W * 0.44, L * 0.28, W * 0.48)
+          ..lineTo(-L * 0.36, W * 0.48)
+          ..quadraticBezierTo(-L * 0.50, W * 0.44, -L * 0.50, W * 0.34);
+      }
+      return p..close();
+    })();
+
     final bodyRect = Rect.fromLTWH(-L / 2, -W / 2, L, W);
-    c.drawRRect(
-        RRect.fromRectAndRadius(bodyRect, Radius.circular(9 * scaleF)),
-        Paint()..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [body.withValues(alpha: 0.90), body, landShade(body)],
-        ).createShader(bodyRect));
-    if (isPlayer) {
-      // little racing stripe (accent color)
-      c.drawRect(
-          Rect.fromLTWH(-L / 2 + 4 * scaleF, -W * 0.10, L - 8 * scaleF,
-              W * 0.14),
-          _fill(accent, alpha: 0.85));
+    c.drawPath(
+        bodyPath,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              lighten(body, .16),
+              body,
+              darken(body, .20),
+            ],
+          ).createShader(bodyRect));
+
+    // ---- gloss sheen (top-half highlight) ----
+    c.drawPath(
+        bodyPath,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.center,
+            colors: [const Color(0xFFFFFFFF), const Color(0x00FFFFFF)],
+            stops: const [0.0, 1.0],
+          ).createShader(Rect.fromLTWH(-L / 2, -W / 2, L, W / 2)));
+    // ---- outline ----
+    c.drawPath(
+        bodyPath,
+        _stroke(const Color(0x33000000), 1.1 * s));
+
+    // ---- racing stripes (mod) ----
+    if (hasStripes) {
+      for (final wy in [-0.17, 0.17]) {
+        c.drawRect(
+            Rect.fromLTWH(-L * 0.42, W * wy - W * 0.042, L * 0.84,
+                W * 0.084),
+            _fill(accent, alpha: 0.82));
+      }
     }
-    // spoiler (back edge)
-    c.drawRect(
-        Rect.fromLTWH(-L / 2 - 5 * scaleF, -W * 0.42, 6 * scaleF, W * 0.84),
-        _fill(darken(body, 0.35)));
-    // cockpit glass
-    final glass = RRect.fromRectAndRadius(
-        Rect.fromLTWH(-L * 0.05, -W * 0.30, L * 0.30, W * 0.60),
-        Radius.circular(5 * scaleF));
+    // ---- hood details per style ----
+    if (bodyStyle == BodyStyle.muscle) {
+      c.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                  center: Offset(L * 0.26, 0),
+                  width: 7 * s,
+                  height: W * 0.30),
+              Radius.circular(2.2 * s)),
+          _fill(darken(body, .30)));
+    } else {
+      for (var i = 0; i < 3; i++) {
+        c.drawRRect(
+            RRect.fromRectAndRadius(
+                Rect.fromLTWH(L * 0.24 + i * 4.4 * s, -W * 0.10,
+                    3.0 * s, W * 0.20),
+                Radius.circular(1.4 * s)),
+            _fill(const Color(0x55000000)));
+      }
+    }
+
+    // ---- cockpit: windshield / roof / rear window ----
+    final roofSpan = bodyStyle == BodyStyle.classic ? 0.26 : 0.30;
+    final glassRect =
+        Rect.fromLTWH(-L * 0.28, -W * 0.34, L * 0.62, W * 0.68);
     final glassPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [const Color(0xFFE3F5FF), const Color(0xFF9FD0EA)],
-      ).createShader(Rect.fromLTWH(-L * 0.05, -W * 0.30, L * 0.30, W * 0.60));
-    c.drawRRect(glass, glassPaint);
-    // wheels
-    final wheelH = 7 * scaleF;
-    for (final wx in [-L * 0.32, L * 0.30]) {
-      c.drawOval(
-          Rect.fromCenter(
-              center: Offset(wx, W * 0.42),
-              width: 14 * scaleF,
-              height: wheelH),
-          _fill(const Color(0xFF22252B)));
+        colors: [const Color(0xFFEAF7FF), const Color(0xFF9EC8E4)],
+      ).createShader(glassRect);
+    // windshield (front trapezoid)
+    final windshield = Path()
+      ..moveTo(L * 0.10, -W * 0.33)
+      ..lineTo(L * 0.34, -W * 0.26)
+      ..lineTo(L * 0.34, W * 0.26)
+      ..lineTo(L * 0.10, W * 0.33)
+      ..close();
+    c.drawPath(windshield, glassPaint);
+    // roof (body-tone panel)
+    c.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(-L * 0.16, -W * 0.34, L * roofSpan, W * 0.68),
+            Radius.circular(3 * s)),
+        _fill(darken(body, .12)));
+    // rear window
+    final rear = Path()
+      ..moveTo(-L * 0.16, -W * 0.31)
+      ..lineTo(-L * 0.28, -W * 0.26)
+      ..lineTo(-L * 0.28, W * 0.26)
+      ..lineTo(-L * 0.16, W * 0.31)
+      ..close();
+    c.drawPath(rear, glassPaint);
+    // glass glint
+    c.drawLine(Offset(L * 0.30, -W * 0.20), Offset(L * 0.16, -W * 0.02),
+        _stroke(Colors.white, 1.2 * s));
+
+    // ---- moon-roof extras on top of the roof ----
+    if (hasLightbar) {
+      for (var i = 0; i < 4; i++) {
+        c.drawCircle(
+            Offset(-L * 0.14 + i * 4.2 * s, -W * 0.2), 1.7 * s,
+            _fill(const Color(0xFFFFF59D)));
+      }
     }
-    // headlight
-    c.drawCircle(
-        Offset(L * 0.47, -W * 0.18),
-        2.6 * scaleF,
-        _fill(const Color(0xFFFFF59D), alpha: 0.95));
+    if (hasAntenna) {
+      c.drawLine(
+          Offset(-L * 0.05, W * 0.10), Offset(-L * 0.05, W * 0.34),
+          _stroke(const Color(0xFF37474F), 1.2 * s));
+      c.drawCircle(
+          Offset(-L * 0.05, W * 0.34 + math.sin(tick * 9) * 1.2 * s),
+          2.0 * s,
+          _fill(accent));
+    }
+    if (hasRoundel) {
+      c.drawCircle(Offset(L * 0.02, 0), W * 0.17,
+          _fill(Colors.white, alpha: 0.9));
+      final tp = TextPainter(
+          text: const TextSpan(text: '7'),
+          textAlign: TextAlign.center,
+          textDirection: TextDirection.ltr)
+        ..layout();
+      tp.paint(c, Offset(L * 0.02 - tp.width / 2, -tp.height / 2));
+    }
+
+    // ---- mirrors ----
+    for (final wy in [-1.0, 1.0]) {
+      c.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromLTWH(
+                  L * 0.20 - 1.5 * s, W * wy - 3.0 * s, 4.0 * s, 2.4 * s),
+              Radius.circular(1.2 * s)),
+          _fill(darken(body, .30)));
+    }
+
+    // ---- rear wing (spoiler mod -> grand edition) ----
+    if (hasSpoiler) {
+      final bigWing = mods.contains('spoiler');
+      c.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromLTWH(-L * 0.545 - (bigWing ? 2.5 * s : 0),
+                  -W * (bigWing ? 0.54 : 0.44),
+                  5.5 * s,
+                  W * (bigWing ? 1.08 : 0.88)),
+              Radius.circular(2 * s)),
+          _fill(hasStripes ? accent.withValues(alpha: .8) : darken(body, .38)));
+      if (bigWing) {
+        for (final wy in [-0.55, 0.55]) {
+          c.drawRect(
+              Rect.fromLTWH(
+                  -L * 0.545 + 1.5 * s, W * wy - 1.2 * s, 4.5 * s, 2.4 * s),
+              _fill(Colors.black38));
+        }
+      }
+      for (final wy in [-0.30, 0.30]) {
+        c.drawRect(
+            Rect.fromLTWH(
+                -L * 0.50, W * wy - 1.4 * s, 4.5 * s, 2.8 * s),
+            _fill(darken(body, .42)));
+      }
+    }
+
+    // ---- champion flag (waves with the speed) ----
+    if (hasFlag) {
+      final sway = math.sin(tick * 18) * 2.4 * s;
+      c.drawLine(Offset(-L * 0.15, 0), Offset(-L * 0.15, -W * 0.56),
+          _stroke(const Color(0xFF37474F), 1.1 * s));
+      final pennant = Path()
+        ..moveTo(-L * 0.15, -W * 0.56)
+        ..lineTo(-L * 0.15 - 8.5 * s - sway, -W * 0.50 + sway * 0.4)
+        ..lineTo(-L * 0.15, -W * 0.40)
+        ..close();
+      c.drawPath(pennant, _fill(accent, alpha: .9));
+    }
+
+    // ---- headlight beams at night ----
+    if (theme.night) {
+      for (final wy in [-0.34, 0.34]) {
+        final beam = Path()
+          ..moveTo(L * 0.50, W * wy)
+          ..lineTo(L * 1.35, W * (wy - 0.32))
+          ..lineTo(L * 1.35, W * (wy + 0.32))
+          ..close();
+        c.drawPath(beam, _fill(const Color(0xFFFFF3C0), alpha: 0.14));
+      }
+    }
+    // headlights
+    for (final wy in [-0.24, 0.24]) {
+      c.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                  center: Offset(L * 0.455, W * wy),
+                  width: 3.6 * s,
+                  height: 4.6 * s),
+              Radius.circular(1.8 * s)),
+          _fill(const Color(0xFFFFF9C4), alpha: 0.97));
+    }
     // taillights
-    c.drawCircle(Offset(-L * 0.49, -W * 0.2), 2.2 * scaleF,
-        _fill(const Color(0xFFFF5252), alpha: 0.9));
-    c.drawCircle(Offset(-L * 0.49, W * 0.2), 2.2 * scaleF,
-        _fill(const Color(0xFFFF5252), alpha: 0.9));
+    for (final wy in [-0.27, 0.27]) {
+      c.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                  center: Offset(-L * 0.485, W * wy),
+                  width: 2.6 * s,
+                  height: 3.8 * s),
+              Radius.circular(1.3 * s)),
+          _fill(const Color(0xFFFF5252), alpha: 0.92));
+    }
+
     c.restore();
   }
 
@@ -575,6 +856,8 @@ class RacePainter extends CustomPainter {
         tilt: tilt,
         boostFlames: world.boosting,
         isPlayer: true,
+        bodyStyle: bodyStyle,
+        mods: mods,
       );
     }
   }
@@ -640,6 +923,14 @@ Color darken(Color color, [double amount = .3]) {
   final hsl = HSLColor.fromColor(color);
   final darker = hsl.withLightness((hsl.lightness * (1 - amount)).clamp(0, 1));
   return darker.toColor();
+}
+
+Color lighten(Color color, [double amount = .3]) {
+  final hsl = HSLColor.fromColor(color);
+  final lighter = hsl
+      .withLightness((hsl.lightness * (1 + amount)).clamp(0.0, 1.0))
+      .withSaturation((hsl.saturation * 0.92).clamp(0.0, 1.0));
+  return lighter.toColor();
 }
 
 Color landShade(Color color) => darken(color, .22);

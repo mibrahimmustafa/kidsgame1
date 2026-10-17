@@ -73,6 +73,8 @@ class Sound {
           'boost.wav': [],
           'win.wav': [],
           'oops.wav': [],
+          'engine_loop.wav': [],
+          'screech.wav': [],
           'menu_music.wav': [],
           'race_music.wav': [],
         };
@@ -255,6 +257,40 @@ void buildSfx(Map<String, List<double>> m) {
           env(t, dur, a: 0.006, r: i == 3 ? 0.4 : 0.05);
     }, gain: 0.85);
   }
+
+  // engine_loop — a warm idle drone that loops seamlessly. Pitch is
+  // shifted live at play time by the engine speed, so the loop itself
+  // must be perfectly periodic: 1.0 s at excursions of the base throb.
+  final engineLen = 1.0;
+  final engine = List<double>.filled((engineLen * sr).round(), 0);
+  for (var i = 0; i < engine.length; i++) {
+    final t = i / sr;
+    // fundamental firing frequency (4-cyl feel) + harmonics + rumble
+    final f = 62.0;
+    final throb = 0.55 * math.sin(2 * math.pi * f * t) +
+        0.30 * math.sin(2 * math.pi * f * 2 * t) +
+        0.16 * math.sin(2 * math.pi * f * 3 * t + 1.1) +
+        0.10 * math.sin(2 * math.pi * f * 0.5 * t + 0.4);
+    // airy exhaust puff synced to the throb (loops tidily)
+    final puff = (math.sin(2 * math.pi * f * t) > 0.92) ? 0.06 : 0.0;
+    engine[i] = throb * 0.6 + puff + whiteNoise() * 0.02;
+  }
+  clampNormalize(engine, targetPeak: 0.8);
+  m['engine_loop.wav'] = engine;
+
+  // screech — brief high-friction tire squeal (kid-friendly, short)
+  final screechLen = 0.5;
+  final screech = List<double>.filled((screechLen * sr).round(), 0);
+  for (var i = 0; i < screech.length; i++) {
+    final t = i / sr;
+    // warbling partial around 1.4-2.2 kHz + body mid grind
+    final wob = 250 * math.sin(2 * math.pi * 9 * t);
+    final s1 = sine(t, 1600 + wob) * 0.5;
+    final s2 = sine(t, 830 + wob * 0.4) * 0.3;
+    screech[i] = (s1 + s2) * expEnv(t, screechLen, k: 1.4);
+  }
+  clampNormalize(screech, targetPeak: 0.75);
+  m['screech.wav'] = screech;
 }
 
 // ------------------------------------------------------------------ music

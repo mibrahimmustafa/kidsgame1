@@ -25,6 +25,7 @@ class Entity {
   double speedFactor; // fraction of player's cruise speed (traffic only)
   double phase; // animation phase (bobbing coins / wobble traffic)
   int variant; // sprite variant so repeats don't look cloned
+  double nudge = 0; // lateral push from the player's HORN (traffic only)
 
   /// Collision half-extents in road units (football ~ x:[-0.14,0.14]).
   double get halfWidth => switch (kind) {
@@ -46,6 +47,60 @@ class Entity {
         EntityKind.cone => 1.0,
         EntityKind.oilSlick => 0.6,
       };
+}
+
+/// ------------------------------- Bodies --------------------------------- ///
+
+/// Chassis shapes the player can own and swap — each one changes the
+/// silhouette in both the race painter and the garage preview.
+enum BodyStyle {
+  classic('classic', 'Classic', 0),
+  muscle('muscle', 'Muscle', 180),
+  sport('sport', 'Sprint', 320),
+  monster('monster', 'Monster Truck', 500);
+
+  const BodyStyle(this.id, this.label, this.price);
+  final String id;
+  final String label;
+  final int price;
+
+  static BodyStyle byId(String id) =>
+      values.firstWhere((b) => b.id == id, orElse: () => classic);
+}
+
+/// ------------------------------- Mods ------------------------------------ ///
+
+/// Visual bolt-on components. Purely cosmetic — every kid should feel
+/// like a champion when they buy one.
+class CarMod {
+  const CarMod(this.id, this.name, this.emoji, this.price, this.blurb);
+  final String id;
+  final String name;
+  final String emoji;
+  final int price;
+  final String blurb;
+
+  static const mods = <CarMod>[
+    CarMod('spoiler', 'Grand Wing', '🪽', 120,
+        'A championship rear wing with endplates.'),
+    CarMod('stripes', 'Hero Stripes', '🏁', 80,
+        'Twin racing stripes across hood and roof.'),
+    CarMod('neon', 'Neon Underglow', '💡', 150,
+        'A friendly glow that lights the tarmac.'),
+    CarMod('exhaust', 'Twin Mega Exhaust', '🔥', 140,
+        'Double pipes with extra rocket flames.'),
+    CarMod('flag', 'Champion Flag', '🚩', 100,
+        'A wavy flag to celebrate every win.'),
+    CarMod('roundel', 'Race Number 7', '🔢', 90,
+        'Pro style racing number on the roof.'),
+    CarMod('lightbar', 'Roof Light Bar', '🔦', 130,
+        'Four tiny lamps for dark races.'),
+    CarMod('antenna', 'Bubble Antenna', '🎈', 60,
+        'A happy bobbing antenna ball.'),
+  ];
+
+  static CarMod byId(String id) =>
+      mods.firstWhere((m) => m.id == id, orElse: () => mods.first);
 }
 
 /// ------------------------------- Cars ------------------------------------ ///

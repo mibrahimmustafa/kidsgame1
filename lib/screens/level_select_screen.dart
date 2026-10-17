@@ -110,6 +110,9 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
     Navigator.of(context).pushNamed('/race', arguments: {
       'level': level,
       'car': CarSpec.byId(widget.save.selectedCarId),
+      'body': widget.save.bodyId,
+      'mods': widget.save.equippedMods,
+      'cockpit': widget.save.cockpitView,
     });
   }
 }

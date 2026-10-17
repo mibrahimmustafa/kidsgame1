@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
+import '../game/audio.dart';
 import '../game/save.dart';
 
 /// Kid safety first: every destructive action (reset progress) hides
@@ -78,7 +79,9 @@ class _ParentDialogState extends State<_ParentDialog> {
               title: 'Music',
               value: save.musicOn,
               onChanged: (v) {
+                AudioHub.instance.attachSave(save);
                 save.setMusic(v);
+                AudioHub.instance.applySettings();
                 setState(() {});
               },
             ),
@@ -88,6 +91,17 @@ class _ParentDialogState extends State<_ParentDialog> {
               value: save.sfxOn,
               onChanged: (v) {
                 save.setSfx(v);
+                if (v) AudioHub.instance.play(Sfx.click);
+                setState(() {});
+              },
+            ),
+            _switchTile(
+              icon: Icons.videocam_rounded,
+              title: 'Real cockpit camera',
+              value: save.cockpitView,
+              onChanged: (v) {
+                AudioHub.instance.attachSave(save);
+                save.setCockpitView(v);
                 setState(() {});
               },
             ),

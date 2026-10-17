@@ -39,7 +39,6 @@ class _ResultScreenState extends State<ResultScreen> {
     if (r.heartsLeft >= kMaxHearts || r.starsCollected >= 12) s++;
     return s.clamp(1, 3);
   }
-
   LevelSpec get _level =>
       LevelSpec.levels[widget.result.levelIndex.clamp(0, LevelSpec.levels.length - 1)];
 

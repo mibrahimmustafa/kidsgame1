@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../core/app_theme.dart';
 import 'audio.dart';
+import 'cockpit.dart';
 import 'models.dart';
 import 'painter.dart';
 import 'theme.dart';
@@ -17,10 +18,16 @@ class RaceScreen extends StatefulWidget {
     super.key,
     required this.level,
     required this.car,
+    this.bodyStyle = BodyStyle.classic,
+    this.mods = const <String>[],
+    this.cockpit = true,
   });
 
   final LevelSpec level;
   final CarSpec car;
+  final BodyStyle bodyStyle;
+  final List<String> mods;
+  final bool cockpit;
 
   @override
   State<RaceScreen> createState() => _RaceScreenState();
@@ -36,6 +43,12 @@ class _RaceScreenState extends State<RaceScreen>
   bool _resultPushed = false;
   bool _paused = false;
   double _nitroFill = 0.55;
+
+  // cockpit driving input
+  double _dragSteer = 0;
+  bool _dragging = false;
+  final Set<LogicalKeyboardKey> _keysDown = <LogicalKeyboardKey>{};
+  final FocusNode _focus = FocusNode();
 
   @override
   void initState() {
@@ -54,6 +67,7 @@ class _RaceScreenState extends State<RaceScreen>
   @override
   void dispose() {
     _ticker.stop();
+    AudioHub.instance.engineStop();
     WidgetsBinding.instance.removeObserver(this);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -72,8 +86,10 @@ class _RaceScreenState extends State<RaceScreen>
 
     if (!_paused) {
       _tickElapsed += step;
+      _applySteering(step);
       _world.update(step);
       _drainEvents();
+      AudioHub.instance.engine(_world.running ? _world.engineLoad : 0.0);
 
       if (!_resultPushed && !_world.running) {
         _resultPushed = true;
@@ -86,8 +102,40 @@ class _RaceScreenState extends State<RaceScreen>
         });
       }
       _nitroFill = _world.nitro / 100;
+    } else {
+      AudioHub.instance.engineStop();
     }
     setState(() {}); // repaint the scene every tick
+  }
+
+  /// Analog wheel: keyboard steer wins while held, otherwise the last
+  /// drag position eases back to center like a real steering wheel.
+  void _applySteering(double dt) {
+    if (widget.cockpit) {
+      final key = _keysDown.contains(LogicalKeyboardKey.arrowRight) ||
+              _keysDown.contains(LogicalKeyboardKey.keyD)
+          ? 1.0
+          : _keysDown.contains(LogicalKeyboardKey.arrowLeft) ||
+                  _keysDown.contains(LogicalKeyboardKey.keyA)
+              ? -1.0
+              : 0.0;
+      if (key != 0.0) {
+        _dragSteer = key;
+        _dragging = true;
+      } else if (!_dragging) {
+        _dragSteer *= (1 - 4.5 * dt).clamp(0.0, 1.0);
+        if (_dragSteer.abs() < 0.02) _dragSteer = 0;
+      }
+      _world.setSteer(_dragSteer.clamp(-1.0, 1.0));
+      _world.setBrake(
+          _keysDown.contains(LogicalKeyboardKey.arrowDown) ||
+              _keysDown.contains(LogicalKeyboardKey.keyS) ||
+              _brakeHeld);
+    } else {
+      // sky view keeps its gentle assist steering
+      _world.setSteer(0);
+      _world.setBrake(false);
+    }
   }
 
   void _drainEvents() {
@@ -122,6 +170,9 @@ class _RaceScreenState extends State<RaceScreen>
       } else if (e == GameEvent.oops) {
         hub.play(Sfx.oops);
         HapticFeedback.heavyImpact();
+      } else if (e == GameEvent.screech) {
+        hub.play(Sfx.screech, volume: 0.55);
+        HapticFeedback.selectionClick();
       }
     }
     _world.events.clear();
@@ -136,13 +187,25 @@ class _RaceScreenState extends State<RaceScreen>
   }
 
   // ---------------------------------------------------------------- input
+  bool _brakeHeld = false;
+
+  /// Human interface device: horizontal shoulder-drag on the cockpit
+  /// screen (like pulling the wheel), vertical drag still works for the
+  /// sky view. Also accepts keyboard arrows from the desktop.
   void _onDrag(DragUpdateDetails d) {
-    if (_paused) return;
-    final size = MediaQuery.of(context).size;
-    final roadBand = size.height * 0.70; // matches painter's road band
-    final dy = d.delta.dy;
-    // up-drag (dy<0) steers toward -1 (top lane). Invert for natural feel:
-    _world.setSteerTarget(_world.targetLateral + dy / roadBand * 2.4);
+    if (_paused || _world.running == false) return;
+    if (widget.cockpit) {
+      final size = MediaQuery.of(context).size;
+      _dragging = true;
+      _dragSteer =
+          (_dragSteer + d.delta.dx / (size.width * 0.34)).clamp(-1.0, 1.0);
+    } else {
+      final size = MediaQuery.of(context).size;
+      final roadBand = size.height * 0.70; // matches painter's road band
+      final dy = d.delta.dy;
+      // up-drag (dy<0) steers toward -1 (top lane). Invert for natural feel:
+      _world.setSteerTarget(_world.targetLateral + dy / roadBand * 2.4);
+    }
   }
 
   void _togglePause() => setState(() => _paused = !_paused);
@@ -155,26 +218,74 @@ class _RaceScreenState extends State<RaceScreen>
       backgroundColor: _theme.skyTop,
       body: PopScope(
         canPop: false, // in-race: let the pause overlay handle it
-        child: GestureDetector(
-          onPanUpdate: _onDrag,
-          behavior: HitTestBehavior.opaque,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // the scene itself
-              CustomPaint(
-                isComplex: true,
-                willChange: true,
-                painter: RacePainter(_world, _theme, _tickElapsed),
-              ),
-              _buildHud(size),
-              _buildBoostButton(size),
-              if (_paused) _buildPauseOverlay(),
-            ],
+        child: Focus(
+          focusNode: _focus,
+          autofocus: true,
+          onKeyEvent: _handleKey,
+          child: GestureDetector(
+            onPanUpdate: _onDrag,
+            behavior: HitTestBehavior.opaque,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // the scene itself — cockpit camera is the star
+                CustomPaint(
+                  isComplex: true,
+                  willChange: true,
+                  painter: widget.cockpit
+                      ? CockpitPainter(
+                          _world,
+                          _theme,
+                          _tickElapsed,
+                          mods: widget.mods.toSet(),
+                        )
+                      : RacePainter(
+                          _world,
+                          _theme,
+                          _tickElapsed,
+                          bodyStyle: widget.bodyStyle,
+                          mods: widget.mods.toSet(),
+                        ),
+                ),
+                _buildHud(size),
+                if (widget.cockpit) _buildBrakePedal(size),
+                if (widget.cockpit) _buildHornButton(size),
+                if (widget.cockpit) _buildSteerHint(size),
+                _buildBoostButton(size),
+                if (_paused) _buildPauseOverlay(),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    final k = event.logicalKey;
+    if ([
+      LogicalKeyboardKey.arrowLeft,
+      LogicalKeyboardKey.arrowRight,
+      LogicalKeyboardKey.arrowUp,
+      LogicalKeyboardKey.arrowDown,
+      LogicalKeyboardKey.keyA,
+      LogicalKeyboardKey.keyD,
+      LogicalKeyboardKey.space,
+      LogicalKeyboardKey.keyS,
+    ].contains(k)) {
+      setState(() {
+        if (event is KeyDownEvent || event is KeyRepeatEvent) {
+          _keysDown.add(k);
+          if (k == LogicalKeyboardKey.arrowUp) _world.toggleBoost(true);
+          if (k == LogicalKeyboardKey.space && !_paused) _world.doHonk();
+        } else {
+          _keysDown.remove(k);
+          if (k == LogicalKeyboardKey.arrowUp) _world.toggleBoost(false);
+        }
+      });
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   Widget _buildHud(Size size) {
@@ -221,12 +332,22 @@ class _RaceScreenState extends State<RaceScreen>
                     ),
                   ),
                   FractionallySizedBox(
-                    widthFactor:
-                        (progress).clamp(0.0, 1.0).toDouble(),
-                    child: ClipRRect(
-                      borderRadius:
-                          const BorderRadius.all(Radius.circular(barH)),
-                      child: Container(height: barH, color: Colors.amber),
+                    widthFactor: progress.clamp(0.0, 1.0).toDouble(),
+                    child: Container(
+                      height: barH,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFC531), Color(0xFFFF7043)],
+                        ),
+                        borderRadius: const BorderRadius.all(
+                            Radius.circular(barH)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFFC531).withValues(alpha: .6),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   Align(
@@ -301,8 +422,103 @@ class _RaceScreenState extends State<RaceScreen>
     );
   }
 
-  Widget _buildPauseOverlay() {
-    return Positioned.fill(
+  /// Brake pedal — bottom left, hold to scrub speed. Kid-friendly and
+  /// forgiving: releasing it snaps back to full power.
+  Widget _buildBrakePedal(Size size) {
+    return Align(
+      alignment: Alignment.bottomLeft,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: GestureDetector(
+          onPanDown: (_) => _brakeHeld = true,
+          onPanEnd: (_) => _brakeHeld = false,
+          onTapDown: (_) => _brakeHeld = true,
+          onTapUp: (_) => _brakeHeld = false,
+          onTapCancel: () => _brakeHeld = false,
+          child: AnimatedScale(
+            scale: _brakeHeld ? 0.88 : 1.0,
+            duration: const Duration(milliseconds: 120),
+            child: Container(
+              width: 74,
+              height: 74,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _brakeHeld
+                    ? const Color(0xFFEF5350)
+                    : Colors.black45,
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 8),
+                ],
+                border: Border.all(color: Colors.white24, width: 2),
+              ),
+              child: const Icon(
+                Icons.traffic_outlined,
+                color: Colors.white,
+                size: 34,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Transparent tap zone over the wheel hub — blowing the HORN startles
+  /// nearby traffic into swerving away.
+  Widget _buildHornButton(Size size) {
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: GestureDetector(
+        onTapDown: (_) {
+          _world.hornHeld = true;
+          _world.doHonk();
+        },
+        onTapUp: (_) => _world.hornHeld = false,
+        onTapCancel: () => _world.hornHeld = false,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: size.width * 0.11,
+          height: size.height * 0.14,
+          color: Colors.transparent,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSteerHint(Size size) {
+    if (_tickElapsed < 3.2) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: EdgeInsets.only(
+              top: size.height * 0.14,
+              left: 12,
+              right: 12),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Text(
+              'DRAG LEFT / RIGHT TO STEER • SPACE = HORN',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildPauseOverlay() {    return Positioned.fill(
       child: Container(
         color: Colors.black.withValues(alpha: 0.55),
         child: Center(

@@ -63,7 +63,12 @@ class SpeedyStarsApp extends StatelessWidget {
       routes: {
         '/home': (context) => HomeScreen(save: save),
         '/levels': (context) => LevelSelectScreen(save: save),
-        '/garage': (context) => GarageScreen(save: save),
+        '/garage': (context) => GarageScreen(
+              save: save,
+              initialTab: ModalRoute.of(context)?.settings.arguments is String
+                  ? ModalRoute.of(context)?.settings.arguments as String
+                  : 'cars',
+            ),
       },
     );
   }
@@ -78,6 +83,15 @@ class RacePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final level = args['level'] as LevelSpec;
     final car = args['car'] as CarSpec;
-    return RaceScreen(level: level, car: car);
+    final bodyId = args['body'] as String?;
+    final mods = (args['mods'] as List?)?.cast<String>() ?? const <String>[];
+    return RaceScreen(
+      level: level,
+      car: car,
+      bodyStyle:
+          bodyId == null ? BodyStyle.classic : BodyStyle.byId(bodyId),
+      mods: mods,
+      cockpit: args['cockpit'] as bool? ?? true,
+    );
   }
 }

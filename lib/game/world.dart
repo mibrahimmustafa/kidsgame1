@@ -24,6 +24,8 @@ class GameWorld {
   static const double coinNitroGain = 14;
   static const int maxHearts = 3;
   static const double invulnerableSeconds = 2.4;
+  static const double brakeSpeedScale = 0.42; // cockpit brake pedal
+  static const double steerLateralRate = 1.30; // road-widths/second at full lock
 
   // ---- world state -------------------------------------------------------
   double distance = 0;
@@ -46,6 +48,13 @@ class GameWorld {
   double flash = 0;
   double fireworkTimer = 0;
 
+  // ---- cockpit driving state ----
+  double steer = 0; // -1 (full left) .. +1 (full right) — rotates the wheel
+  bool braking = false;
+  bool hornHeld = false;
+  double _screechHold = 0;
+  double _screechCooldown = 0;
+
   final List<Entity> entities = <Entity>[];
   final List<Particle> particles = <Particle>[];
   final List<GameEvent> events = <GameEvent>[]; // drained by the UI layer
@@ -58,11 +67,28 @@ class GameWorld {
 
   double get progress => (distance / level.targetDistance).clamp(0.0, 1.0);
 
-  /// Current forward velocity (units/second), considering boost & bumps.
-  double get activeSpeed =>
-      level.cruiseSpeed *
-      (boosting ? boostSpeedScale : 1.0) *
-      (bumpSeconds > 0 ? 0.55 : 1.0);
+  /// Current forward velocity (units/second), considering boost, bumps &
+  /// the brake pedal (cockpit mode). Braking eases in like a real pedal.
+  double _brakeEase = 0;
+
+  double get activeSpeed {
+    final base = level.cruiseSpeed *
+        (boosting ? boostSpeedScale : 1.0) *
+        (bumpSeconds > 0 ? 0.55 : 1.0);
+    if (braking) return base * (1.0 - (1.0 - brakeSpeedScale) * _brakeEase);
+    return base;
+  }
+
+  /// Engine load 0..1.35 for sound pitch (1.0 = cruise).
+  double get engineLoad =>
+      activeSpeed / level.cruiseSpeed;
+
+  /// Gentle winding-road curvature for the cockpit camera: the road bends
+  /// slowly and the car feels a mild centrifugal push. Fully cosmetic for
+  /// sky view, physical for cockpit.
+  double get roadCurve =>
+      math.sin(distance * 0.0021) * 0.55 +
+      math.sin(distance * 0.0037 + 1.7) * 0.28;
 
   static const List<Color> trafficLivery = [
     Color(0xFFEF5350),
@@ -77,6 +103,31 @@ class GameWorld {
   // --------------------------------------------------------------- input
   void setSteerTarget(double lateralTarget) {
     targetLateral = lateralTarget.clamp(-1.0, 1.0);
+  }
+
+  /// Cockpit driving: analog steering wheel (-1..+1) that self-centers
+  /// and a brake pedal. Applied as a force so fast driving always feels
+  /// heavier than slow driving.
+  void setSteer(double analog) {
+    steer = analog.clamp(-1.0, 1.0);
+  }
+
+  void setBrake(bool engaged) {
+    braking = engaged;
+  }
+
+  /// Blaring the horn startles nearby cars — they swerve out of the way.
+  /// A friendly superpower, and it keeps kids honking joyfully.
+  void doHonk() {
+    events.add(GameEvent.honk);
+    for (final e in entities) {
+      if (e.kind != EntityKind.trafficCar) continue;
+      if (e.y < 1.0 || e.y > 17) continue;
+      final gap = e.x - lateral;
+      if (gap.abs() < 0.42) {
+        e.nudge = (gap.abs() < 0.02 ? 0.5 : gap.sign) * 1.6;
+      }
+    }
   }
 
   void toggleBoost(bool enable) {
@@ -107,12 +158,42 @@ class GameWorld {
     elapsedSeconds += dt;
 
     // --- motion
+    _brakeEase = braking
+        ? math.min(1.0, _brakeEase + dt * 6)
+        : math.max(0.0, _brakeEase - dt * 4);
     final speed = activeSpeed;
     distance += speed * dt;
     speedKmh = speed * 1.8;
     if (!finished && distance >= level.targetDistance) {
       finished = true;
       events.add(GameEvent.win);
+    }
+
+    // --- lateral movement
+    if (steer != 0.0) {
+      // cockpit driving: wheel force scaled by road speed (real feel)
+      final speedFactor = (speed / level.cruiseSpeed).clamp(0.35, 2.0);
+      final grip = slipSeconds > 0 ? 0.55 : 1.0;
+      lateral += steer * steerLateralRate * speedFactor * grip * dt;
+      targetLateral = lateral; // keeps sky painter consistent
+    } else {
+      targetLateral = lateral; // no sticky auto-center for cockpit
+    }
+    // centrifugal drift from the winding road (outward push)
+    final speedFactor = (speed / level.cruiseSpeed).clamp(0.0, 2.0);
+    lateral += -roadCurve * 0.30 * speedFactor * dt;
+
+    // --- tire screech when cornering hot (slipping grip)
+    _screechCooldown = math.max(0, _screechCooldown - dt);
+    if (steer.abs() > 0.72 && speedFactor > 1.05 && slipSeconds <= 0) {
+      _screechHold += dt;
+      if (_screechHold > 0.28 && _screechCooldown <= 0) {
+        _screechHold = 0;
+        _screechCooldown = 1.1;
+        if (!braking) events.add(GameEvent.screech);
+      }
+    } else {
+      _screechHold = 0;
     }
 
     // --- lateral steering with exponential smoothing (frame-rate safe)
@@ -154,7 +235,13 @@ class GameWorld {
       }
       if (e.kind == EntityKind.trafficCar) {
         e.x += math.sin(e.phase * (0.9 + e.variant * 0.11)) * 0.06 * dt;
-        e.x = e.x.clamp(-0.85, 0.85);
+        // honk power: startled cars drift away from an angry little horn
+        if (e.nudge != 0) {
+          e.x += e.nudge * dt;
+          e.nudge = e.nudge * (1 - 2.5 * dt).clamp(0.0, 0.999);
+          if (e.nudge.abs() < 0.05) e.nudge = 0;
+        }
+        e.x = e.x.clamp(-1.2, 1.2);
         _honkIfNear(e);
       }
     }
@@ -383,6 +470,7 @@ class GameEvent {
   static const honk = GameEvent._('honk');
   static const boostStart = GameEvent._('boostStart');
   static const boostEnd = GameEvent._('boostEnd');
+  static const screech = GameEvent._('screech');
 }
 
 class Particle {
