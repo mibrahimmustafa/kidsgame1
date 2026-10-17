@@ -80,8 +80,9 @@ class GameSave {
       ownedBodies.contains(id) || id == 'classic';
 
   void buyBody(BodyStyle body) {
-    if (ownsBody(body.id) || coins < body.price) return;
-    coins -= body.price;
+    // Customization is free — kids should always be able to express
+    // themselves without grinding coins first.
+    if (ownsBody(body.id)) return;
     final list = ownedBodies;
     list.add(body.id);
     _data['ownedBodies'] = list;
@@ -101,8 +102,8 @@ class GameSave {
   bool isModEquipped(String id) => equippedMods.contains(id);
 
   void buyMod(CarMod mod) {
-    if (ownedMods.contains(mod.id) || coins < mod.price) return;
-    coins -= mod.price;
+    // Free customization — no coin gate on self-expression.
+    if (ownedMods.contains(mod.id)) return;
     final owned = ownedMods..add(mod.id);
     _data['ownedMods'] = owned;
     final equipped = equippedMods..add(mod.id);
@@ -119,8 +120,8 @@ class GameSave {
   }
 
   void buyCar(CarSpec car) {
-    if (isCarOwned(car.id) || coins < car.price) return;
-    coins -= car.price;
+    // Free to choose any car — collect and switch freely.
+    if (isCarOwned(car.id)) return;
     ownedCars.add(car.id);
     selectedCarId = car.id;
     _persist();

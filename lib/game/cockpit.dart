@@ -912,8 +912,7 @@ class CockpitPainter extends CustomPainter {
           _fill(const Color(0x38FFFFFF)));
       c.restore();
     }
-    // center hub + horn button
-    c.save();
+    // center hub + horn button (no transform change — no save needed)
     final hub = Rect.fromCenter(
         center: Offset(0, 0), width: rx * 0.58, height: ry * 1.55);
     c.drawRRect(

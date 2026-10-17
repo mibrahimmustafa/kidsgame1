@@ -153,6 +153,27 @@ class CarPreviewPainter extends CustomPainter {
         ..lineTo(x0 + w * 0.96, y0 + bodyH * 0.8)
         ..lineTo(x0 + w * 0.06, y0 + bodyH * 0.8)
         ..close();
+    } else if (bodyStyle == BodyStyle.classic) {
+      // Modern EV fastback — sleek Tesla-like silhouette: long flowing
+      // roofline, low nose with an LED light bar, integrated tail lip.
+      bodyPath
+        ..moveTo(x0 + w * 0.03, y0 + bodyH * 1.02)
+        ..lineTo(x0 + w * 0.02, y0 + bodyH * 0.34)
+        ..quadraticBezierTo(
+            x0 + w * 0.02, y0 + bodyH * 0.24, x0 + w * 0.06, y0 + bodyH * 0.22)
+        ..quadraticBezierTo(
+            x0 + w * 0.16, y0 + bodyH * 0.02, x0 + w * 0.34, y0 - bodyH * 0.30)
+        ..quadraticBezierTo(
+            x0 + w * 0.46, y0 - bodyH * 0.62, x0 + w * 0.60, y0 - bodyH * 0.60)
+        ..quadraticBezierTo(
+            x0 + w * 0.76, y0 - bodyH * 0.52, x0 + w * 0.88, y0 - bodyH * 0.16)
+        ..quadraticBezierTo(
+            x0 + w * 0.98, y0 - bodyH * 0.02, x0 + w * 0.995, y0 + bodyH * 0.32)
+        ..quadraticBezierTo(
+            x0 + w * 1.0, y0 + bodyH * 0.55, x0 + w * 0.99, y0 + bodyH * 0.72)
+        ..quadraticBezierTo(
+            x0 + w * 0.98, y0 + bodyH, x0 + w * 0.93, y0 + bodyH * 1.02)
+        ..close();
     } else {
       bodyPath
         ..moveTo(x0 + w * 0.02, y0 + bodyH * 0.42)
@@ -213,25 +234,65 @@ class CarPreviewPainter extends CustomPainter {
       canvas.drawPath(
           glassPath,
           Paint()
-            ..shader = const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFEFF9FF), Color(0xFF8FC4E2)],
-            ).createShader(glassRect));
-      canvas.drawLine(
-          Offset(glassRect.center.dx + w * 0.02, glassRect.top + 2),
-          Offset(glassRect.center.dx + w * 0.02, glassRect.bottom),
-          Paint()..color = ink.withValues(alpha: .30)..strokeWidth = 2);
+            ..shader = (bodyStyle == BodyStyle.classic
+                ? const LinearGradient(
+                    // panoramic EV tinted glass
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF3D566B), Color(0xFF101B26)],
+                  )
+                : const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFEFF9FF), Color(0xFF8FC4E2)],
+                  ))
+                .createShader(glassRect));
+      if (bodyStyle != BodyStyle.classic) {
+        canvas.drawLine(
+            Offset(glassRect.center.dx + w * 0.02, glassRect.top + 2),
+            Offset(glassRect.center.dx + w * 0.02, glassRect.bottom),
+            Paint()..color = ink.withValues(alpha: .30)..strokeWidth = 2);
+      } else {
+        // glass reflection streak
+        canvas.drawPath(
+            glassPath,
+            Paint()
+              ..shader = LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withValues(alpha: .30),
+                  Colors.white.withValues(alpha: .0),
+                ],
+              ).createShader(glassRect));
+      }
     }
 
-    // ---- accent skirt + door seam + handle ----
-    canvas.drawRect(
-        Rect.fromLTWH(x0 + w * 0.10, y0 + bodyH * 0.90, w * 0.80, bodyH * 0.10),
-        Paint()..color = darken(body, .45));
-    canvas.drawLine(
-        Offset(x0 + w * 0.42, y0 + bodyH * 0.10),
-        Offset(x0 + w * 0.42, y0 + bodyH * 0.85),
-        Paint()..color = ink.withValues(alpha: .25)..strokeWidth = 1.4);
+    // ---- accent skirt + door seam + handle (cartoon bodies only) ----
+    if (bodyStyle == BodyStyle.classic) {
+      // flush EV look: subtle lower shade + a flush door handle pill
+      canvas.drawRect(
+          Rect.fromLTWH(x0 + w * 0.10, y0 + bodyH * 0.92, w * 0.80,
+              bodyH * 0.08),
+          Paint()
+            ..color = darken(body, .45).withValues(alpha: 0.75));
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromLTWH(x0 + w * 0.45, y0 + bodyH * 0.30, w * 0.075,
+                  bodyH * 0.09),
+              Radius.circular(bodyH * 0.05)),
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.65));
+    } else {
+      canvas.drawRect(
+          Rect.fromLTWH(x0 + w * 0.10, y0 + bodyH * 0.90, w * 0.80,
+              bodyH * 0.10),
+          Paint()..color = darken(body, .45));
+      canvas.drawLine(
+          Offset(x0 + w * 0.42, y0 + bodyH * 0.10),
+          Offset(x0 + w * 0.42, y0 + bodyH * 0.85),
+          Paint()..color = ink.withValues(alpha: .25)..strokeWidth = 1.4);
+    }
 
     // ---- racing stripes: bold twin bands with the mod ----
     if (mods.contains('stripes')) {
@@ -289,23 +350,56 @@ class CarPreviewPainter extends CustomPainter {
           Paint()..color = const Color(0xFF455A64));
     }
 
-    // ---- lights: head + tail ----
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromCenter(
-                center: Offset(x0 + w * 0.945, y0 + bodyH * 0.34),
-                width: w * 0.030,
-                height: bodyH * 0.18),
-            Radius.circular(bodyH * 0.06)),
-        Paint()..color = const Color(0xFFFFF3C4));
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromCenter(
-                center: Offset(x0 + w * 0.028, y0 + bodyH * 0.30),
-                width: w * 0.022,
-                height: bodyH * 0.22),
-            Radius.circular(bodyH * 0.06)),
-        Paint()..color = const Color(0xFFFF5252));
+    // ---- lights: head + tail (EV light bars on the classic) ----
+    if (bodyStyle == BodyStyle.classic) {
+      // front LED light bar hugging the nose + soft glow
+      final nose = Rect.fromLTWH(
+          x0 + w * 0.985, y0 + bodyH * 0.10, bodyH * 0.10, bodyH * 0.55);
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                  center: Offset(x0 + w * 0.985, y0 + bodyH * 0.38),
+                  width: bodyH * 0.09,
+                  height: bodyH * 0.55),
+              Radius.circular(bodyH * 0.08)),
+          Paint()..color = const Color(0xFFEFFBFF));
+      canvas.drawCircle(
+          Offset(x0 + w * 0.985, y0 + bodyH * 0.38),
+          bodyH * 0.42,
+          Paint()..color = const Color(0x2E80DEEA));
+      // full-width tail light bar
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromLTWH(
+                  x0 + w * 0.005, y0 + bodyH * 0.26, w * 0.045,
+                  bodyH * 0.10),
+              Radius.circular(bodyH * 0.05)),
+          Paint()..color = const Color(0xFFFF4757));
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromLTWH(
+                  x0 + w * 0.005, y0 + bodyH * 0.26, w * 0.045,
+                  bodyH * 0.10),
+              Radius.circular(bodyH * 0.05)),
+          Paint()..color = const Color(0x40FF4757));
+    } else {
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                  center: Offset(x0 + w * 0.945, y0 + bodyH * 0.34),
+                  width: w * 0.030,
+                  height: bodyH * 0.18),
+              Radius.circular(bodyH * 0.06)),
+          Paint()..color = const Color(0xFFFFF3C4));
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                  center: Offset(x0 + w * 0.028, y0 + bodyH * 0.30),
+                  width: w * 0.022,
+                  height: bodyH * 0.22),
+              Radius.circular(bodyH * 0.06)),
+          Paint()..color = const Color(0xFFFF5252));
+    }
 
     // ---- wheels: monster gets giants ----
     final wheelR = bodyStyle == BodyStyle.monster
