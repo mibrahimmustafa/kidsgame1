@@ -2,10 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// The launcher icon artwork: a glossy dark tile with a radial glow,
-/// diagonal speed streaks, the Tesla-style EV car, and a gold star.
-/// `maskable` keeps all art inside the 80% safe zone for Android
-/// adaptive masking.
+/// The launcher icon artwork — modern streaming-era game-cover style:
+/// electric radial burst, glass light sweep, a HUGE edge-cropped hero car,
+/// a 3D faceted gold star with sparkles, and a soft edge vignette.
+/// `maskable` keeps all art inside the Android adaptive safe zone.
 class AppIcon extends StatelessWidget {
   const AppIcon({this.maskable = false, super.key});
   final bool maskable;
@@ -26,77 +26,114 @@ class _AppIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final r = size.width / 512;
+    final tile = Offset.zero & size;
+    canvas.clipRect(tile);
 
-    // ---- background: deep night gradient ----
+    // ================= background: electric radial burst =================
     canvas.drawRect(
-        Offset.zero & size,
+        tile,
+        Paint()
+          ..shader = const RadialGradient(
+            center: Alignment(0.0, 0.24),
+            radius: 1.15,
+            colors: [
+              Color(0xFF3A8DFF),
+              Color(0xFF1C4BB8),
+              Color(0xFF0A1233),
+            ],
+            stops: [0.0, 0.52, 1.0],
+          ).createShader(tile));
+
+    // sky sheen across the upper half (soft blue, not grey)
+    final sweep = Path()
+      ..moveTo(-size.width * .2, 0)
+      ..lineTo(size.width * .62, 0)
+      ..lineTo(size.width * .28, size.height * .62)
+      ..lineTo(-size.width * .2, size.height * .62)
+      ..close();
+    canvas.drawPath(
+        sweep,
         Paint()
           ..shader = const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF081226), Color(0xFF0B1026), Color(0xFF171233)],
-          ).createShader(Offset.zero & size));
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+            colors: [Color(0x2E6FB6FF), Color(0x006FB6FF)],
+          ).createShader(tile));
 
-    // ---- radial glow behind the car (teal-to-pink neon) ----
-    _glow(canvas, const Offset(150, 110), 190 * r, const Color(0x2E4FC3F7));
-    _glow(canvas, const Offset(400, 330), 210 * r, const Color(0x2EFF7BD5));
+    // subtle speed ring behind everything (halo circle)
+    final ringC = Offset(maskable ? 256 * r : 288 * r,
+        maskable ? 256 * r : 236 * r);
+    canvas.drawCircle(
+        ringC,
+        194 * r,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 20 * r
+          ..color = Colors.white.withValues(alpha: .08));
+    canvas.drawArc(
+        Rect.fromCircle(center: ringC, radius: 194 * r),
+        -math.pi * 0.9,
+        math.pi * 0.55,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = 5 * r
+          ..color = Colors.white.withValues(alpha: .30));
 
-    // ---- diagonal speed streaks ----
-    final streak = Paint()
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 9 * r;
-    final streaks = <(double, double, double, double, Color)>[
-      (60, 150, 240, 130, const Color(0x33FFFFFF)),
-      (300, 60, 470, 90, const Color(0x2EFFFFFF)),
-      (90, 380, 300, 340, const Color(0x26FFFFFF)),
-      (350, 440, 480, 410, const Color(0x2EFFFFFF)),
-    ];
-    for (final s in streaks) {
-      streak.color = s.$5;
-      canvas.drawLine(
-          Offset(s.$1 * r, s.$2 * r), Offset(s.$3 * r, s.$4 * r), streak);
-    }
+    // ================= art block (scaled for maskable safe zone) ========
+    final f = maskable ? 0.74 : 1.0;
+    canvas.save();
+    canvas.translate(size.width * (1 - f) / 2, size.height * (1 - f) / 2);
+    canvas.scale(f, f);
 
-    // ---- the car, hero of the tile (dedicated icon-scale artwork) ----
-    final carW = (maskable ? 280.0 : 360.0) * r;
+    // neon floor glow under the car
+    _glow(
+        canvas,
+        Offset(size.width * .5, size.height * .97),
+        size.width * .50,
+        const Color(0x4D28C7FF));
+
+    // --- 3D gold star (drawn before the car so the car overlaps: depth) --
+    final starC = Offset(size.width * .77, size.height * .24);
+    final starR = size.width * .175;
+    _glow(canvas, starC, starR * 2.6, const Color(0x8CFFD54F));
+    _star(canvas, starC, starR, r);
+
+    // --- sparkles ---
+    _sparkle(canvas, Offset(size.width * .93, size.height * .09), 13 * r);
+    _sparkle(canvas, Offset(size.width * .62, size.height * .10), 9 * r);
+    _sparkle(canvas, Offset(size.width * .09, size.height * .46), 10 * r);
+
+    // ================= the huge hero car (edge-cropped) ==================
+    final carW = size.width * 1.02;
     final carH = carW * (210.0 / 380.0);
-    final carOffset = Offset(size.width / 2 - carW / 2,
-        size.height * (maskable ? 0.52 : 0.55) - carH / 2);
+    final carOffset = Offset(
+        size.width / 2 - carW / 2,                    // slight crop both ends
+        size.height * .90 - carH * (226.0 / 210.0)); // wheels near bottom
     canvas.save();
     canvas.translate(carOffset.dx, carOffset.dy);
     _drawCar(canvas, carW, carH);
     canvas.restore();
 
-    // ---- gold star, top right ----
-    final starC = Offset(maskable ? 130 * r + 110 * r : 428 * r,
-        maskable ? 96 * r : 92 * r);
-    _glow(canvas, starC, 56 * r, const Color(0x4EFFE082));
-    final path = Path();
-    const starR = 42.0;
-    for (var i = 0; i < 10; i++) {
-      final ang = -math.pi / 2 + i * math.pi / 5;
-      final radius = i.isEven ? starR : starR * 0.44;
-      final p = Offset(
-          starC.dx + radius * r * math.cos(ang),
-          starC.dy + radius * r * math.sin(ang));
-      if (i == 0) {
-        path.moveTo(p.dx, p.dy);
-      } else {
-        path.lineTo(p.dx, p.dy);
-      }
-    }
-    path.close();
-    canvas.drawShadow(path, const Color(0x88000000), 6 * r, false);
-    canvas.drawPath(
-        path,
+    canvas.restore();
+
+    // ================= vignette (cinematic edges) =======================
+    canvas.drawRect(
+        tile,
         Paint()
-          ..shader = const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFFFF176), Color(0xFFFFB300)],
-          ).createShader(Rect.fromCircle(center: starC, radius: starR * r)));
+          ..shader = RadialGradient(
+            radius: 1.0,
+            colors: [
+              const Color(0x00000000),
+              Colors.black.withValues(alpha: .45),
+            ],
+            stops: const [0.56, 1.0],
+          ).createShader(Rect.fromCircle(
+              center: size.center(Offset.zero), radius: 380 * r)));
   }
 
+  // ------------------------------------------------------------------
   /// Side-view EV fastback drawn in a fixed 380x210 art space, scaled to
   /// fit [w]x[h]. Crisp at icon sizes — separate from the in-game preview.
   void _drawCar(Canvas c, double w, double h) {
@@ -108,20 +145,7 @@ class _AppIconPainter extends CustomPainter {
       Offset(288 * s, ground),
     ];
 
-    // parking shadow
-    c.drawOval(
-        Rect.fromCenter(
-            center: Offset(195 * s, ground + wheelR * 0.92),
-            width: w * 0.82,
-            height: 26 * s),
-        Paint()
-          ..shader = RadialGradient(colors: [
-            const Color(0x59000000),
-            const Color(0x00000000),
-          ]).createShader(Rect.fromCenter(
-              center: Offset(195 * s, ground + wheelR * 0.92),
-              width: w * 0.82,
-              height: 26 * s)));
+    // (no ground shadow — icons read cleaner floating on the poster glow)
 
     // ---- silhouette: smooth fastback ----
     final body = Path()
@@ -144,18 +168,18 @@ class _AppIconPainter extends CustomPainter {
     c.drawPath(
         body,
         Paint()
-          ..shader = LinearGradient(
+          ..shader = const LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: const [
-              Color(0xFFFF5A6E),
-              Color(0xFFE63C55),
-              Color(0xFFB12038),
+            colors: [
+              Color(0xFFFF7B8C),
+              Color(0xFFEF3D5B),
+              Color(0xFFA91230),
             ],
-            stops: const [0.0, 0.55, 1.0],
+            stops: [0.0, 0.55, 1.0],
           ).createShader(Rect.fromLTWH(0, 40 * s, w, 150 * s)));
 
-    // body-side shading + beltline highlight
+    // side sheen sweep
     c.drawPath(
         body,
         Paint()
@@ -164,17 +188,17 @@ class _AppIconPainter extends CustomPainter {
                   end: Alignment.centerRight,
                   colors: [
                 const Color(0x00FFFFFF),
-                Colors.white.withValues(alpha: .05),
-                const Color(0x00000000),
+                Colors.white.withValues(alpha: .10),
+                const Color(0x33000000),
               ])
               .createShader(Rect.fromLTWH(0, 0, w, h)));
     c.drawLine(
         Offset(52 * s, 116 * s),
         Offset(340 * s, 128 * s),
         Paint()
-          ..strokeWidth = 3.2 * s
+          ..strokeWidth = 3.4 * s
           ..strokeCap = StrokeCap.round
-          ..color = Colors.white.withValues(alpha: .35));
+          ..color = Colors.white.withValues(alpha: .42));
 
     // ---- tinted glass canopy ----
     final glass = Path()
@@ -192,10 +216,19 @@ class _AppIconPainter extends CustomPainter {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF9FD8FF).withValues(alpha: .55),
-              const Color(0xFF16233B).withValues(alpha: .95),
+              const Color(0xFFBDE8FF).withValues(alpha: .60),
+              const Color(0xFF101E36).withValues(alpha: .96),
             ],
           ).createShader(Rect.fromLTWH(140 * s, 56 * s, 180 * s, 60 * s)));
+
+    // glass reflection streak
+    c.drawLine(
+        Offset(162 * s, 78 * s),
+        Offset(220 * s, 70 * s),
+        Paint()
+          ..strokeWidth = 4 * s
+          ..strokeCap = StrokeCap.round
+          ..color = Colors.white.withValues(alpha: .35));
 
     // flush door handle
     c.drawRRect(
@@ -205,10 +238,9 @@ class _AppIconPainter extends CustomPainter {
                 width: 26 * s,
                 height: 6 * s),
             Radius.circular(3 * s)),
-        Paint()..color = Colors.white.withValues(alpha: .75));
+        Paint()..color = Colors.white.withValues(alpha: .78));
 
     // ---- light signature ----
-    // LED headlight strip (front)
     final nose = Rect.fromLTWH(24 * s, 126 * s, 44 * s, 7 * s);
     c.drawRRect(RRect.fromRectAndRadius(nose, Radius.circular(4 * s)),
         Paint()..color = const Color(0xFF03172E));
@@ -218,55 +250,125 @@ class _AppIconPainter extends CustomPainter {
             Radius.circular(2.5 * s)),
         Paint()
           ..shader = const LinearGradient(colors: [
-            Color(0xFFBFF3FF),
+            Color(0xFFD8FBFF),
             Color(0xFF7FE7FF),
           ]).createShader(nose)
           ..maskFilter = MaskFilter.blur(BlurStyle.solid, 2.5 * s));
-    // tail light bar (rear)
     final tail = Rect.fromLTWH(344 * s, 124 * s, 7 * s, 44 * s);
     c.drawRRect(RRect.fromRectAndRadius(tail, Radius.circular(4 * s)),
         Paint()
           ..shader = const LinearGradient(colors: [
-            Color(0xFFFF8A80),
-            Color(0xFFFF4438),
+            Color(0xFFFF9A90),
+            Color(0xFFFF3B2E),
           ]).createShader(tail)
-          ..maskFilter = MaskFilter.blur(BlurStyle.solid, 3 * s));
+          ..maskFilter = MaskFilter.blur(BlurStyle.solid, 3.5 * s));
 
-    // aero skirt along the bottom
+    // aero skirt
     c.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(60 * s, 176 * s, 280 * s, 8 * s),
             Radius.circular(4 * s)),
-        Paint()..color = const Color(0xFF201014));
+        Paint()..color = const Color(0xFF1C0D12));
 
     // ---- aero wheels ----
     for (final ctr in wheels) {
-      c.drawCircle(ctr, wheelR, Paint()..color = const Color(0xFF14171C));
-      c.drawCircle(ctr, wheelR * .80, Paint()..color = const Color(0xFF2A2F36));
+      c.drawCircle(ctr, wheelR, Paint()..color = const Color(0xFF12161D));
+      c.drawCircle(ctr, wheelR * .80, Paint()..color = const Color(0xFF2C323B));
       c.drawCircle(
           ctr,
           wheelR * .80,
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = wheelR * .07
-            ..color = const Color(0xFF525A63));
+            ..color = const Color(0xFF59636E));
       final blade = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = wheelR * .09
         ..strokeCap = StrokeCap.round
-        ..color = const Color(0xFF5C646D);
+        ..color = const Color(0xFF646E78);
       for (var i = 0; i < 9; i++) {
-        c.drawArc(
-            Rect.fromCircle(center: ctr, radius: wheelR * .58),
-            i * 2 * 3.14159 / 9,
-            .5,
-            false,
-            blade);
+        c.drawArc(Rect.fromCircle(center: ctr, radius: wheelR * .58),
+            i * 2 * math.pi / 9, .5, false, blade);
       }
-      c.drawCircle(ctr, wheelR * .13, Paint()..color = const Color(0xFF10131A));
+      c.drawCircle(ctr, wheelR * .13, Paint()..color = const Color(0xFF0E1117));
       c.drawCircle(
-          ctr, wheelR * .05, Paint()..color = const Color(0xFF93A0AB));
+          ctr, wheelR * .05, Paint()..color = const Color(0xFF9AA7B3));
     }
+  }
+
+  // ------------------------------------------------------------------
+
+  /// 3D faceted 5-point star.
+  void _star(Canvas c, Offset center, double radius, double r) {
+    final path = Path();
+    for (var i = 0; i < 10; i++) {
+      final ang = -math.pi / 2 + i * math.pi / 5;
+      final rad = i.isEven ? radius : radius * 0.44;
+      final p = Offset(center.dx + rad * math.cos(ang),
+          center.dy + rad * math.sin(ang));
+      if (i == 0) {
+        path.moveTo(p.dx, p.dy);
+      } else {
+        path.lineTo(p.dx, p.dy);
+      }
+    }
+    path.close();
+
+    // drop depth first
+    final deep = Path.from(path)
+      ..shift(Offset(0, 12 * r));
+    c.drawPath(
+        deep,
+        Paint()
+          ..shader = const LinearGradient(colors: [
+            Color(0xFFB26A00),
+            Color(0xFF7A3E00),
+          ]).createShader(Rect.fromCircle(
+              center: center + const Offset(0, 12), radius: radius)));
+
+    // base gold gradient fill
+    c.drawPath(
+        path,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.bottomLeft,
+            end: Alignment.topRight,
+            colors: [Color(0xFFFFA000), Color(0xFFFFE680)],
+          ).createShader(Rect.fromCircle(center: center, radius: radius)));
+
+    // glossy light band across a clipped star
+    final band = Rect.fromCenter(
+        center: Offset(center.dx - radius * .35, center.dy - radius * .3),
+        width: radius * 1.6,
+        height: radius * .5);
+    c.save();
+    c.clipPath(path);
+    c.drawOval(
+        band,
+        Paint()
+          ..color = Colors.white.withValues(alpha: .35)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * .28));
+    c.restore();
+
+    // sparkle eye
+    c.drawCircle(center - Offset(radius * .55, radius * .15), radius * .07,
+        Paint()..color = Colors.white.withValues(alpha: .9));
+  }
+
+  /// 4-ray twinkle.
+  void _sparkle(Canvas c, Offset at, double size) {
+    final p = Path()
+      ..moveTo(at.dx, at.dy - size)
+      ..quadraticBezierTo(at.dx, at.dy, at.dx + size, at.dy)
+      ..quadraticBezierTo(at.dx, at.dy, at.dx, at.dy + size)
+      ..quadraticBezierTo(at.dx, at.dy, at.dx - size, at.dy)
+      ..quadraticBezierTo(at.dx, at.dy, at.dx, at.dy - size)
+      ..close();
+    c.drawPath(
+        p,
+        Paint()
+          ..color = Colors.white.withValues(alpha: .8)
+          ..maskFilter = MaskFilter.blur(BlurStyle.solid, size * .12));
   }
 
   void _glow(Canvas c, Offset at, double radius, Color color) {
@@ -274,9 +376,10 @@ class _AppIconPainter extends CustomPainter {
         at,
         radius,
         Paint()
-          ..shader = RadialGradient(
-                  colors: [color, color.withValues(alpha: 0)])
-              .createShader(Rect.fromCircle(center: at, radius: radius)));
+          ..shader = RadialGradient(colors: [
+            color,
+            color.withValues(alpha: 0)
+          ]).createShader(Rect.fromCircle(center: at, radius: radius)));
   }
 
   @override
