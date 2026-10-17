@@ -28,7 +28,13 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
     final levels = LevelSpec.levels;
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.skyGradient),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF090E1F), Color(0xFF101632), Color(0xFF170F33)],
+          ),
+        ),
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -37,38 +43,37 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
               Row(
                 children: [
                   const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    onPressed: () {
-                      AudioHub.instance.play(Sfx.click);
-                      Navigator.pop(context);
-                    },
-                  ),
+                  _GlassBack(),
                   const Spacer(),
                   Text('RACES',
                       style: Theme.of(context)
                           .textTheme
                           .headlineMedium
                           ?.copyWith(
-                              color: AppTheme.inkDark,
-                              fontWeight: FontWeight.w900)),
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2)),
                   const Spacer(),
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppTheme.coinGold,
+                      color: Colors.white.withValues(alpha: .10),
                       borderRadius: BorderRadius.circular(18),
+                      border:
+                          Border.all(color: AppTheme.coinGold.withValues(alpha: .7)),
                     ),
                     margin: const EdgeInsets.only(right: 14),
                     child: Row(
                       children: [
                         const Icon(Icons.star_rounded,
-                            color: Colors.white, size: 18),
+                            color: AppTheme.coinGold, size: 18),
                         const SizedBox(width: 4),
                         Text('${widget.save.totalStars}',
                             style: const TextStyle(
-                                fontWeight: FontWeight.w800, fontSize: 14)),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                color: Colors.white)),
                       ],
                     ),
                   ),
@@ -140,7 +145,7 @@ class _LevelTile extends StatelessWidget {
           gradient: gradient,
           borderRadius: BorderRadius.circular(22),
           boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
+            BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 6)),
           ],
         ),
         child: Stack(
@@ -171,7 +176,7 @@ class _LevelTile extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black.withValues(alpha: .55)),
+                        color: Colors.white.withValues(alpha: .8)),
                   ),
                 ],
               ),
@@ -213,6 +218,32 @@ class _LevelTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Frosted circular back button matching the garage/home look.
+class _GlassBack extends StatelessWidget {
+  const _GlassBack();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        AudioHub.instance.play(Sfx.click);
+        Navigator.pop(context);
+      },
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .10),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withValues(alpha: .18)),
+        ),
+        child: const Icon(Icons.arrow_back_rounded,
+            color: Colors.white, size: 24),
       ),
     );
   }

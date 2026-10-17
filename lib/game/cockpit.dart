@@ -1,4 +1,4 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -10,7 +10,7 @@ import 'world.dart';
 /// The signature experience: a first-person COCKPIT view. The road rushes
 /// toward a vanishing point with real projections, the dashboard, a
 /// rotating steering wheel and a working speedometer. Everything is
-/// procedural vector art â€” no bitmaps.
+/// procedural vector art — no bitmaps.
 class CockpitPainter extends CustomPainter {
   CockpitPainter(
     this.world,
@@ -47,7 +47,7 @@ class CockpitPainter extends CustomPainter {
     double shift(double z) => -curve * math.pow(1 - s(z), 1.8) * W * 0.55;
 
     canvas.save();
-    // shake, then opposing body roll â€” pivot around the horizon center
+    // shake, then opposing body roll — pivot around the horizon center
     canvas.translate(shakeX, 0);
     final pivot = Offset(W / 2, horizon + (roadDown - horizon) * 0.45);
     canvas.translate(pivot.dx, pivot.dy);
@@ -287,7 +287,7 @@ class CockpitPainter extends CustomPainter {
     if (theme.rain) _drawRainStreaks(canvas, W, horizon, roadDown, speedFactor);
 
     canvas.restore();
-    // everything below rolls with the car â€” the windshield & dash
+    // everything below rolls with the car — the windshield & dash
     canvas.save();
     canvas.translate(shakeX, shakeY * 0.4);
 
@@ -612,7 +612,7 @@ class CockpitPainter extends CustomPainter {
                 carW * 0.68, carH * 0.12),
             Radius.circular(carW * 0.05)),
         _fill(Color.lerp(livery, Colors.black, .25)!));
-    // taillights â€” bright so they read at distance
+    // taillights — bright so they read at distance
     for (final side in [-1.0, 1.0]) {
       c.drawRRect(
           RRect.fromRectAndRadius(
@@ -642,7 +642,7 @@ class CockpitPainter extends CustomPainter {
   }
 
   // ========================================================== cockpit parts
-  /// The player's hood with their livery/stripes â€” ties the cockpit to
+  /// The player's hood with their livery/stripes — ties the cockpit to
   /// the actual car & chosen mods.
   void _drawHood(Canvas c, double W, double H) {
     final car = world.car;

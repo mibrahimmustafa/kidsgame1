@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'game/audio.dart';
+import 'game/haptics.dart';
 import 'game/models.dart';
 import 'game/race_screen.dart';
 import 'game/save.dart';
@@ -23,6 +24,7 @@ Future<void> main() async {
   final save = await GameSave.load();
   AudioHub.instance.attachSave(save);
   await AudioHub.instance.init();
+  Buzz.attach(save);
 
   runApp(SpeedyStarsApp(save: save));
 }
@@ -95,3 +97,4 @@ class RacePage extends StatelessWidget {
     );
   }
 }
+//flutter run -d web-server --web-port 8090 --web-hostname localhost > web_run.txt 2>&1

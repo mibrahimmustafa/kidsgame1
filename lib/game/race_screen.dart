@@ -1,9 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../core/app_theme.dart';
 import 'audio.dart';
+import 'haptics.dart';
 import 'cockpit.dart';
 import 'models.dart';
 import 'painter.dart';
@@ -156,23 +157,23 @@ class _RaceScreenState extends State<RaceScreen>
         hub.play(Sfx.click, volume: 0.4);
       } else if (e == GameEvent.bounce) {
         hub.play(Sfx.bounce);
-        HapticFeedback.selectionClick();
+        Buzz.selection();
       } else if (e == GameEvent.splash) {
         hub.play(Sfx.splash);
       } else if (e == GameEvent.boom) {
         hub.play(Sfx.oops);
-        HapticFeedback.mediumImpact();
+        Buzz.medium();
       } else if (e == GameEvent.win) {
         hub.play(Sfx.win);
-        HapticFeedback.mediumImpact();
+        Buzz.medium();
       } else if (e == GameEvent.honk) {
         hub.play(Sfx.honk, volume: 0.5);
       } else if (e == GameEvent.oops) {
         hub.play(Sfx.oops);
-        HapticFeedback.heavyImpact();
+        Buzz.heavy();
       } else if (e == GameEvent.screech) {
         hub.play(Sfx.screech, volume: 0.55);
-        HapticFeedback.selectionClick();
+        Buzz.selection();
       }
     }
     _world.events.clear();

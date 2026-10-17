@@ -19,7 +19,7 @@ void main() {
     expect(save.musicOn, isTrue);
   });
 
-  test('GameState: buying a car debits coins and selects it', () async {
+  test('GameState: buying a car is free and selects it', () async {
     final save = await GameSave.load();
     final car = CarSpec.byId('leafy');
     save.coins = 1000;
@@ -27,7 +27,8 @@ void main() {
     save.buyCar(car);
     expect(save.isCarOwned(car.id), isTrue);
     expect(save.selectedCarId, car.id);
-    expect(save.coins, before - car.price);
+    // Customization is unlocked for everyone: prices are gone for good.
+    expect(save.coins, before);
   });
 
   test('Finishing a level unlocks the next one and awards stars', () async {
@@ -100,26 +101,28 @@ void main() {
     expect(reloaded.starsFor(0), 3);
   });
 
-  test('Body styles: purchase debits coins, equips and persists', () async {
+  test('Body styles: equip is free and persists', () async {
     final save = await GameSave.load();
     save.coins = 1000;
     save.buyBody(BodyStyle.byId('monster'));
     expect(save.ownsBody('monster'), isTrue);
     expect(save.bodyId, 'monster');
-    expect(save.coins, 1000 - BodyStyle.byId('monster').price);
+    // No coin debit — every chassis is free to swap.
+    expect(save.coins, 1000);
     final reloaded = await GameSave.load();
     expect(reloaded.ownsBody('monster'), isTrue);
     expect(reloaded.bodyId, 'monster');
   });
 
-  test('Mods: buying equips by default, toggle persists', () async {
+  test('Mods: buying is free, equips by default and toggles persist', () async {
     final save = await GameSave.load();
     save.coins = 1000;
     final mod = CarMod.byId('neon');
     save.buyMod(mod);
     expect(save.ownsMod('neon'), isTrue);
     expect(save.isModEquipped('neon'), isTrue);
-    expect(save.coins, 1000 - mod.price);
+    // No coin debit — every bolt-on is free to add.
+    expect(save.coins, 1000);
     save.toggleMod('neon');
     expect(save.isModEquipped('neon'), isFalse);
     save.toggleMod('neon');

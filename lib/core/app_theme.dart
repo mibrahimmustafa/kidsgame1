@@ -353,8 +353,6 @@ class CarPreviewPainter extends CustomPainter {
     // ---- lights: head + tail (EV light bars on the classic) ----
     if (bodyStyle == BodyStyle.classic) {
       // front LED light bar hugging the nose + soft glow
-      final nose = Rect.fromLTWH(
-          x0 + w * 0.985, y0 + bodyH * 0.10, bodyH * 0.10, bodyH * 0.55);
       canvas.drawRRect(
           RRect.fromRectAndRadius(
               Rect.fromCenter(
@@ -401,30 +399,63 @@ class CarPreviewPainter extends CustomPainter {
           Paint()..color = const Color(0xFFFF5252));
     }
 
-    // ---- wheels: monster gets giants ----
+    // ---- wheels: monster gets giants; classic gets Tesla-style aero discs ----
+    final isAero = bodyStyle == BodyStyle.classic;
     final wheelR = bodyStyle == BodyStyle.monster
         ? bodyH * 0.66
         : bodyH * (bodyStyle == BodyStyle.sport ? 0.44 : 0.52);
     for (final offset in [x0 + w * 0.22, x0 + w * 0.76]) {
       final cyW = cy + bodyH * 0.28 + lift * 0.4;
-      canvas.drawCircle(Offset(offset, cyW), wheelR,
-          Paint()..color = const Color(0xFF17191D));
-      canvas.drawCircle(Offset(offset, cyW), wheelR * 0.62,
-          Paint()..color = const Color(0xFFD9DEE3));
-      final spokes = Paint()
-        ..color = const Color(0xFF9AA3AC)
-        ..strokeWidth = wheelR * 0.15
-        ..strokeCap = StrokeCap.round;
-      for (var i = 0; i < 5; i++) {
-        final ang = i * 2 * math.pi / 5 + 0.4;
-        canvas.drawLine(
-            Offset(offset, cyW + wheelR * 0.16),
-            Offset(offset + wheelR * 0.55 * math.cos(ang),
-                cyW + wheelR * 0.55 * math.sin(ang)),
-            spokes);
+      final center = Offset(offset, cyW);
+      canvas.drawCircle(center, wheelR, Paint()..color = const Color(0xFF17191D));
+
+      if (isAero) {
+        // Aero turbine disc: dark face, concentric rim, swept blades, hub.
+        canvas.drawCircle(
+            center, wheelR * 0.80, Paint()..color = const Color(0xFF2A2F36));
+        canvas.drawCircle(
+            center, wheelR * 0.80,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = wheelR * 0.06
+              ..color = const Color(0xFF484F58));
+        final blade = Paint()
+          ..color = const Color(0xFF586068)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = wheelR * 0.10
+          ..strokeCap = StrokeCap.round;
+        for (var i = 0; i < 8; i++) {
+          final a0 = i * 2 * math.pi / 8 + 0.25;
+          canvas.drawArc(Rect.fromCircle(center: center, radius: wheelR * 0.56),
+              a0, 0.55, false, blade);
+        }
+        canvas.drawArc(Rect.fromCircle(center: center, radius: wheelR * 0.70),
+            0.4, 1.9, false,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = wheelR * 0.05
+              ..color = const Color(0xFF6C757D));
+        canvas.drawCircle(
+            center, wheelR * 0.14, Paint()..color = const Color(0xFF11141A));
+        canvas.drawCircle(
+            center, wheelR * 0.06, Paint()..color = const Color(0xFF8A939C));
+      } else {
+        canvas.drawCircle(
+            center, wheelR * 0.62, Paint()..color = const Color(0xFFD9DEE3));
+        final spokes = Paint()
+          ..color = const Color(0xFF9AA3AC)
+          ..strokeWidth = wheelR * 0.15
+          ..strokeCap = StrokeCap.round;
+        for (var i = 0; i < 5; i++) {
+          final ang = i * 2 * math.pi / 5 + 0.4;
+          canvas.drawLine(
+              Offset(offset, cyW + wheelR * 0.16),
+              Offset(offset + wheelR * 0.55 * math.cos(ang),
+                  cyW + wheelR * 0.55 * math.sin(ang)),
+              spokes);
+        }
+        canvas.drawCircle(center, wheelR * 0.16, Paint()..color = ink);
       }
-      canvas.drawCircle(Offset(offset, cyW), wheelR * 0.16,
-          Paint()..color = ink);
     }
 
     // ---- roof add-ons ----

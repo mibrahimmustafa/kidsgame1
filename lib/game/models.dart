@@ -80,6 +80,12 @@ class CarMod {
   final int price;
   final String blurb;
 
+  static CarMod? byIdOrNull(String id) {
+    for (final m in mods) {
+      if (m.id == id) return m;
+    }
+    return null;
+  }
   static const mods = <CarMod>[
     CarMod('spoiler', 'Grand Wing', '🪽', 120,
         'A championship rear wing with endplates.'),

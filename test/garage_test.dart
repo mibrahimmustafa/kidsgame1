@@ -53,17 +53,17 @@ void main() {
     expect(find.text('Classic'), findsOneWidget);
     expect(find.text('Muscle'), findsOneWidget);
     expect(find.text('Sprint'), findsOneWidget);
-    // The other two visible cards show buy prices (kid starts with 60 coins);
-    // the far-away monster card is not built until we swipe (lazy viewport).
-    expect(find.textContaining('BUY'), findsNWidgets(2));
-    // Classic is free and default-equipped.
+    // The other two visible cards show a FREE equip pill; the far-away
+    // monster card is not built until we swipe (lazy viewport).
+    expect(find.textContaining('FREE — EQUIP'), findsNWidgets(2));
+    // Classic is default-equipped.
     expect(find.text('EQUIPPED ✓'), findsOneWidget);
 
     // Swipe the horizontal list to reveal the last chassis.
     await tester.drag(find.byType(ListView), const Offset(-420, 0));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Monster Truck'), findsOneWidget);
-    expect(find.textContaining('BUY • 500'), findsOneWidget);
+    expect(find.textContaining('FREE — EQUIP'), findsWidgets);
   });
 
   testWidgets('Mods tab lists the bolt-on catalog and toggles gear',
@@ -80,17 +80,16 @@ void main() {
     expect(find.text('Hero Stripes'), findsOneWidget);
     expect(find.text('Champion Flag'), findsOneWidget);
 
-    // Buy the cheapest mod (Bubble Antenna, 60) — tap the '• 60' pill,
-    // not the identically-priced coins badge.
-    await tester.tap(find.textContaining('• 60'));
+    // Customization is free: tap any FREE — ADD pill to unlock + equip.
+    await tester.tap(find.textContaining('FREE — ADD').first);
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
 
-    // After buying, the mod becomes an ON/OFF toggle.
-    expect(find.text('ON ✓'), findsOneWidget);
-    await tester.tap(find.text('ON ✓'));
+    // After unlocking, the mod becomes an ON/OFF toggle.
+    expect(find.textContaining('ON ✓'), findsWidgets);
+    await tester.tap(find.text('ON ✓').first);
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('OFF'), findsOneWidget);
+    expect(find.text('OFF'), findsWidgets);
   });
 }

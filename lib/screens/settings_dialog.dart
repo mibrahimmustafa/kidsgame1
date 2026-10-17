@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
 import '../game/audio.dart';
+import '../game/haptics.dart';
 import '../game/save.dart';
 
 /// Kid safety first: every destructive action (reset progress) hides
@@ -111,6 +112,8 @@ class _ParentDialogState extends State<_ParentDialog> {
               value: save.hapticsOn,
               onChanged: (v) {
                 save.setHaptics(v);
+                // Instant feel-check: buzz once when turning it back on.
+                if (v) Buzz.medium();
                 setState(() {});
               },
             ),
