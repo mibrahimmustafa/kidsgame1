@@ -13,7 +13,11 @@ void main() {
     expect(save.coins, 60);
     expect(save.selectedCarId, CarSpec.defaultCar.id);
     expect(save.isCarOwned(CarSpec.defaultCar.id), isTrue);
-    expect(save.maxUnlockedLevel, 0);
+    expect(save.isLevelUnlocked(0), isTrue);
+    expect(save.isLevelUnlocked(1), isTrue);
+    expect(save.isLevelUnlocked(2), isTrue);
+    expect(save.isLevelUnlocked(3), isFalse);
+    expect(save.maxUnlockedLevel, 2);
     expect(save.musicOn, isTrue);
   });
 
@@ -30,7 +34,9 @@ void main() {
 
   test('Finishing a level unlocks the next one and awards stars', () async {
     final save = await GameSave.load();
-    save.recordRun(
+    expect(save.isLevelCompleted(0), isFalse);
+    expect(save.isLevelUnlocked(3), isFalse);
+    final unlockedNew = save.recordRun(
       const RunResult(
         levelIndex: 0,
         finished: true,
@@ -42,9 +48,12 @@ void main() {
       ),
       2,
     );
-    expect(save.maxUnlockedLevel, 1);
+    expect(unlockedNew, isTrue);
+    expect(save.isLevelCompleted(0), isTrue);
+    expect(save.isLevelUnlocked(3), isTrue);
+    expect(save.maxUnlockedLevel, 3);
     expect(save.starsFor(0), 2);
-    expect(save.coins >= (12 + 30 + 20) - 1, isTrue);
+    expect(save.coins >= (12 + 30 + 20 + 50) - 1, isTrue);
   });
 
   test('LevelSpec packs every world uniquely', () {

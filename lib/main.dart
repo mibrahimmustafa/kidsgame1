@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'core/app_theme.dart';
 import 'game/audio.dart';
 import 'game/models.dart';
 import 'game/race_screen.dart';
@@ -35,19 +36,29 @@ class SpeedyStarsApp extends StatelessWidget {
     switch (settings.name) {
       case '/race':
         final args = settings.arguments! as Map<String, dynamic>;
-        return MaterialPageRoute<void>(
-          settings: settings,
-          builder: (_) => RacePage(args: args),
-        );
+        return _slide(RacePage(args: args), settings);
       case '/result':
         final result = settings.arguments! as RunResult;
-        return MaterialPageRoute<void>(
-          settings: settings,
-          builder: (_) => ResultScreen(result: result, save: save),
-        );
+        return _slide(ResultScreen(result: result, save: save), settings);
       default:
         return null;
     }
+  }
+
+  static PageRoute<void> _slide(Widget page, RouteSettings settings) {
+    return PageRouteBuilder(
+      settings: settings,
+      transitionDuration: const Duration(milliseconds: 320),
+      reverseTransitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (_, __, ___) => page,
+      transitionsBuilder: (_, animation, __, child) {
+        final tween = Tween(
+          begin: const Offset(1.0, 0.0),
+          end: Offset.zero,
+        ).chain(CurveTween(curve: Curves.easeOutCubic));
+        return SlideTransition(position: animation.drive(tween), child: child);
+      },
+    );
   }
 
   @override
@@ -55,9 +66,7 @@ class SpeedyStarsApp extends StatelessWidget {
     return MaterialApp(
       title: 'Speedy Stars Racing',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.light(useMaterial3: true).copyWith(
-        scaffoldBackgroundColor: const Color(0xFFB9E4FF),
-      ),
+      theme: AppTheme.light(),
       initialRoute: '/home',
       onGenerateRoute: _onGenerateRoute,
       routes: {
@@ -81,3 +90,4 @@ class RacePage extends StatelessWidget {
     return RaceScreen(level: level, car: car);
   }
 }
+

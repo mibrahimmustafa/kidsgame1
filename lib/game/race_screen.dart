@@ -27,7 +27,7 @@ class RaceScreen extends StatefulWidget {
 }
 
 class _RaceScreenState extends State<RaceScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late final GameWorld _world;
   late final TrackTheme _theme;
   late final Ticker _ticker;
@@ -36,6 +36,13 @@ class _RaceScreenState extends State<RaceScreen>
   bool _resultPushed = false;
   bool _paused = false;
   double _nitroFill = 0.55;
+  int _prevHearts = 3;
+  bool _heartFlash = false;
+
+  // Nitro glow animation
+  late final AnimationController _nitroGlowCtrl = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 700))
+    ..repeat(reverse: true);
 
   @override
   void initState() {
@@ -47,6 +54,7 @@ class _RaceScreenState extends State<RaceScreen>
     ]);
     _theme = TrackTheme.themeFor(widget.level.theme);
     _world = GameWorld(level: widget.level, car: widget.car);
+    _prevHearts = _world.hearts;
     _ticker = createTicker(_onTick)..start();
     AudioHub.instance.playMusic('race_music');
   }
@@ -54,6 +62,7 @@ class _RaceScreenState extends State<RaceScreen>
   @override
   void dispose() {
     _ticker.stop();
+    _nitroGlowCtrl.dispose();
     WidgetsBinding.instance.removeObserver(this);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -75,6 +84,14 @@ class _RaceScreenState extends State<RaceScreen>
       _world.update(step);
       _drainEvents();
 
+      // Heart-loss flash
+      if (_world.hearts < _prevHearts) {
+        _heartFlash = true;
+        Future.delayed(const Duration(milliseconds: 400),
+            () { if (mounted) setState(() => _heartFlash = false); });
+      }
+      _prevHearts = _world.hearts;
+
       if (!_resultPushed && !_world.running) {
         _resultPushed = true;
         Future<void>.delayed(const Duration(milliseconds: 900), () {
@@ -87,7 +104,7 @@ class _RaceScreenState extends State<RaceScreen>
       }
       _nitroFill = _world.nitro / 100;
     }
-    setState(() {}); // repaint the scene every tick
+    setState(() {});
   }
 
   void _drainEvents() {
@@ -139,13 +156,21 @@ class _RaceScreenState extends State<RaceScreen>
   void _onDrag(DragUpdateDetails d) {
     if (_paused) return;
     final size = MediaQuery.of(context).size;
-    final roadBand = size.height * 0.70; // matches painter's road band
+    final roadBand = size.height * 0.70;
     final dy = d.delta.dy;
-    // up-drag (dy<0) steers toward -1 (top lane). Invert for natural feel:
     _world.setSteerTarget(_world.targetLateral + dy / roadBand * 2.4);
   }
 
-  void _togglePause() => setState(() => _paused = !_paused);
+  void _togglePause() {
+    AudioHub.instance.play(Sfx.click);
+    setState(() => _paused = !_paused);
+  }
+
+  void _goHome() {
+    AudioHub.instance.play(Sfx.click);
+    AudioHub.instance.playMusic('menu_music');
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
 
   // --------------------------------------------------------------- visuals
   @override
@@ -154,14 +179,13 @@ class _RaceScreenState extends State<RaceScreen>
     return Scaffold(
       backgroundColor: _theme.skyTop,
       body: PopScope(
-        canPop: false, // in-race: let the pause overlay handle it
+        canPop: false,
         child: GestureDetector(
           onPanUpdate: _onDrag,
           behavior: HitTestBehavior.opaque,
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // the scene itself
               CustomPaint(
                 isComplex: true,
                 willChange: true,
@@ -185,60 +209,94 @@ class _RaceScreenState extends State<RaceScreen>
         children: [
           Row(
             children: [
-              _IconChip(
+              _GlassChip(
                 icon: Icons.pause_rounded,
                 onTap: _togglePause,
               ),
               const SizedBox(width: 10),
-              // stars guideline
-              _IconChip(icon: Icons.favorite_rounded, label: '${_world.hearts}'),
+              // Hearts — flash red on loss
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _heartFlash
+                      ? Colors.red.withValues(alpha: 0.7)
+                      : Colors.black38,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.favorite_rounded,
+                        size: 18, color: Colors.white),
+                    const SizedBox(width: 5),
+                    Text('${_world.hearts}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14)),
+                  ],
+                ),
+              ),
               const SizedBox(width: 10),
-              _IconChip(
-                  icon: Icons.star_rounded, label: '${_world.starsCollected}'),
+              _GlassChip(
+                  icon: Icons.star_rounded,
+                  iconColor: AppTheme.coinGold,
+                  label: '${_world.starsCollected}'),
               const SizedBox(width: 10),
-              _IconChip(
+              _GlassChip(
                   icon: Icons.monetization_on_rounded,
+                  iconColor: AppTheme.coinGold,
                   label: '${_world.coinsCollected}'),
+              const SizedBox(width: 10),
+              _GlassChip(
+                icon: Icons.flag_rounded,
+                iconColor: AppTheme.coinGold,
+                label: widget.level.index >= 0
+                    ? 'LEVEL ${widget.level.index + 1}: ${widget.level.name.toUpperCase()}'
+                    : 'FREE DRIVE',
+              ),
               const Spacer(),
-              // nitro HUD
               _NitroBadge(fillFraction: _nitroFill),
             ],
           ),
           const SizedBox(height: 8),
-          // progress bar
+          // Gradient progress bar with moving flag icon
           LayoutBuilder(
             builder: (context, constraints) {
               const barH = 10.0;
+              final total = constraints.maxWidth;
               return Stack(
                 alignment: Alignment.centerLeft,
                 children: [
                   ClipRRect(
-                    borderRadius:
-                        const BorderRadius.all(Radius.circular(barH)),
+                    borderRadius: const BorderRadius.all(Radius.circular(barH)),
                     child: Container(
                       height: barH,
                       color: Colors.white24,
                     ),
                   ),
                   FractionallySizedBox(
-                    widthFactor:
-                        (progress).clamp(0.0, 1.0).toDouble(),
+                    widthFactor: progress.clamp(0.0, 1.0).toDouble(),
                     child: ClipRRect(
                       borderRadius:
                           const BorderRadius.all(Radius.circular(barH)),
-                      child: Container(height: barH, color: Colors.amber),
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: Transform.translate(
-                      offset: Offset(4, -4),
-                      child: Icon(
-                        Icons.flag_rounded,
-                        size: 22,
-                        color: Colors.black38,
+                      child: Container(
+                        height: barH,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFFFFD93D), Color(0xFF6BCB77)],
+                          ),
+                        ),
                       ),
                     ),
+                  ),
+                  // Moving flag icon
+                  Positioned(
+                    left: (progress.clamp(0.0, 0.95) * total - 10)
+                        .clamp(0, total - 20),
+                    child: const Icon(Icons.flag_rounded,
+                        size: 18, color: Colors.white),
                   ),
                 ],
               );
@@ -269,6 +327,26 @@ class _RaceScreenState extends State<RaceScreen>
             child: Stack(
               alignment: Alignment.center,
               children: [
+                // Nitro glow when full
+                if (_nitroFill >= 0.95)
+                  AnimatedBuilder(
+                    animation: _nitroGlowCtrl,
+                    builder: (_, __) => Container(
+                      width: 92,
+                      height: 92,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.cyanAccent
+                                .withValues(alpha: 0.4 + _nitroGlowCtrl.value * 0.4),
+                            blurRadius: 16 + _nitroGlowCtrl.value * 12,
+                            spreadRadius: 4,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 CircularProgressIndicator(
                   value: _nitroFill == 0 ? null : _nitroFill.clamp(0, 1),
                   strokeWidth: 6,
@@ -304,34 +382,149 @@ class _RaceScreenState extends State<RaceScreen>
   Widget _buildPauseOverlay() {
     return Positioned.fill(
       child: Container(
-        color: Colors.black.withValues(alpha: 0.55),
+        color: Colors.black.withValues(alpha: 0.65),
         child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'PAUSED',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 42,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 3,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+            decoration: BoxDecoration(
+              color: const Color(0xFF202736),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.25), width: 1.5),
+              boxShadow: const [
+                BoxShadow(color: Colors.black54, blurRadius: 24),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '⏸ PAUSED',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 36,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 3,
+                    shadows: [Shadow(color: Colors.black38, blurRadius: 8)],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.play_arrow_rounded),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.niceGreen,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.fromLTRB(34, 14, 34, 14),
-                  textStyle: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w700),
+                const SizedBox(height: 8),
+                Text(
+                  widget.level.index >= 0
+                      ? 'LEVEL ${widget.level.index + 1}: ${widget.level.name.toUpperCase()}'
+                      : 'FREE DRIVE PRACTICE',
+                  style: const TextStyle(
+                    color: AppTheme.coinGold,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2,
+                  ),
                 ),
-                onPressed: _togglePause,
-                label: const Text('CONTINUE'),
-              ),
-            ],
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Home Button
+                    PressableButton(
+                      onPressed: _goHome,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 26, vertical: 14),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xFF60A5FA), Color(0xFF2563EB)],
+                          ),
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.45),
+                            width: 1.4,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.niceBlue.withValues(alpha: 0.5),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.home_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'HOME',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 16),
+
+                    // Continue Button
+                    PressableButton(
+                      onPressed: _togglePause,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 28, vertical: 14),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xFF4ADE80), Color(0xFF16A34A)],
+                          ),
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.45),
+                            width: 1.4,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.niceGreen.withValues(alpha: 0.5),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.play_arrow_rounded,
+                              color: Colors.white,
+                              size: 26,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'CONTINUE',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -339,12 +532,14 @@ class _RaceScreenState extends State<RaceScreen>
   }
 }
 
-// ------------------------------------------------------------- small HUD cavviets
-class _IconChip extends StatelessWidget {
-  const _IconChip({required this.icon, this.label, this.onTap});
+// ─── Glass HUD chip ───────────────────────────────────────────────────────────
+
+class _GlassChip extends StatelessWidget {
+  const _GlassChip({required this.icon, this.label, this.onTap, this.iconColor});
   final IconData icon;
   final String? label;
   final VoidCallback? onTap;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -353,13 +548,15 @@ class _IconChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.black38,
+          color: Colors.black.withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: Colors.white.withValues(alpha: 0.25), width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: Colors.white),
+            Icon(icon, size: 18, color: iconColor ?? Colors.white),
             if (label != null) ...[
               const SizedBox(width: 5),
               Text(label!,
@@ -375,19 +572,23 @@ class _IconChip extends StatelessWidget {
   }
 }
 
+// ─── Nitro badge ──────────────────────────────────────────────────────────────
+
 class _NitroBadge extends StatelessWidget {
   const _NitroBadge({required this.fillFraction});
   final double fillFraction;
 
   @override
   Widget build(BuildContext context) {
-    final width = 74.0;
+    const width = 74.0;
     return Container(
       width: width,
       height: 44,
       decoration: BoxDecoration(
-        color: Colors.black38,
+        color: Colors.black.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(16),
+        border:
+            Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
       ),
       padding: const EdgeInsets.all(6),
       child: Column(
@@ -403,7 +604,13 @@ class _NitroBadge extends StatelessWidget {
                   FractionallySizedBox(
                     alignment: Alignment.centerLeft,
                     widthFactor: fillFraction.clamp(0, 1),
-                    child: Container(color: Colors.cyanAccent),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.cyanAccent, Color(0xFF26C6DA)],
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),

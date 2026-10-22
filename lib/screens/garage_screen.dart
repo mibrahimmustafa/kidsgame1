@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
@@ -15,11 +17,14 @@ class GarageScreen extends StatefulWidget {
   State<GarageScreen> createState() => _GarageScreenState();
 }
 
-class _GarageScreenState extends State<GarageScreen> {
+class _GarageScreenState extends State<GarageScreen>
+    with SingleTickerProviderStateMixin {
   late final PageController _pc = PageController(viewportFraction: 0.72);
   int _index = 0;
+  bool _showConfetti = false;
 
-  CarSpec get _current => CarSpec.cars[_index.clamp(0, CarSpec.cars.length - 1)];
+  CarSpec get _current =>
+      CarSpec.cars[_index.clamp(0, CarSpec.cars.length - 1)];
 
   void _move(int delta) {
     AudioHub.instance.play(Sfx.click);
@@ -48,6 +53,8 @@ class _GarageScreenState extends State<GarageScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('You need ${car.price - widget.save.coins} more coins!'),
         backgroundColor: AppTheme.inkDark,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ));
       return;
     }
@@ -64,13 +71,15 @@ class _GarageScreenState extends State<GarageScreen> {
             child: const Text('Not now'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.niceGreen),
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.niceGreen),
             onPressed: () {
               widget.save.buyCar(car);
               AudioHub.instance.play(Sfx.star);
               Navigator.pop(ctx);
-              setState(() {});
+              setState(() => _showConfetti = true);
+              Future.delayed(const Duration(milliseconds: 1900), () {
+                if (mounted) setState(() => _showConfetti = false);
+              });
             },
             child: const Text('Buy it!'),
           ),
@@ -85,66 +94,115 @@ class _GarageScreenState extends State<GarageScreen> {
       body: Container(
         decoration: const BoxDecoration(gradient: AppTheme.skyGradient),
         child: SafeArea(
-          child: Column(
+          child: Stack(
             children: [
-              const SizedBox(height: 10),
-              Row(
+              Column(
                 children: [
-                  const SizedBox(width: 8),
-                  _RoundIconButton(
-                      icon: Icons.arrow_back_rounded,
-                      onTap: () => Navigator.of(context).pop()),
-                  const Spacer(),
-                  Text(
-                    'GARAGE',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: AppTheme.inkDark, fontWeight: FontWeight.w900),
+                  const SizedBox(height: 10),
+                  // Header
+                  Row(
+                    children: [
+                      const SizedBox(width: 8),
+                      PressableButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Container(
+                          width: 46,
+                          height: 46,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.arrow_back_rounded,
+                              color: AppTheme.inkDark),
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '🚗 GARAGE',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                                color: AppTheme.inkDark,
+                                fontWeight: FontWeight.w800),
+                      ),
+                      const Spacer(),
+                      _coinBadge(),
+                      const SizedBox(width: 8),
+                    ],
                   ),
-                  const Spacer(),
-                  _coinBadge(),
-                  const SizedBox(width: 8),
+
+                  // Cars PageView
+                  Expanded(
+                    child: PageView.builder(
+                      controller: _pc,
+                      itemCount: CarSpec.cars.length,
+                      onPageChanged: (i) {
+                        setState(() => _index = i);
+                        AudioHub.instance.play(Sfx.click);
+                      },
+                      itemBuilder: (context, i) {
+                        final car = CarSpec.cars[i];
+                        final owned = widget.save.isCarOwned(car.id);
+                        final selected = widget.save.selectedCarId == car.id;
+                        return Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: _CarCard(
+                            car: car,
+                            owned: owned,
+                            selected: selected,
+                            coins: widget.save.coins,
+                            onTap: _buyOrSelect,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  // Dot indicator + nav arrows
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 0, 0, 14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _RoundIconButton(
+                            hero: false,
+                            icon: Icons.chevron_left_rounded,
+                            onTap: () => _move(-1)),
+                        const SizedBox(width: 14),
+                        // Dot indicators
+                        Row(
+                          children: List.generate(CarSpec.cars.length, (i) {
+                            final active = i == _index;
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOutCubic,
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              width: active ? 20 : 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: active
+                                    ? AppTheme.niceOrange
+                                    : Colors.black26,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            );
+                          }),
+                        ),
+                        const SizedBox(width: 14),
+                        _RoundIconButton(
+                            hero: false,
+                            icon: Icons.chevron_right_rounded,
+                            onTap: () => _move(1)),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-              Expanded(
-                child: PageView.builder(
-                  controller: _pc,
-                  itemCount: CarSpec.cars.length,
-                  onPageChanged: (i) => setState(() => _index = i),
-                  itemBuilder: (context, i) {
-                    final car = CarSpec.cars[i];
-                    final owned = widget.save.isCarOwned(car.id);
-                    final selected = widget.save.selectedCarId == car.id;
-                    return Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: _CarCard(
-                        car: car,
-                        owned: owned,
-                        selected: selected,
-                        coins: widget.save.coins,
-                        onTap: _buyOrSelect,
-                      ),
-                    );
-                  },
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _RoundIconButton(
-                        hero: false, icon: Icons.chevron_left_rounded, onTap: () => _move(-1)),
-                    const SizedBox(width: 14),
-                    Text('${_index + 1} of ${CarSpec.cars.length}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.inkDark)),
-                    const SizedBox(width: 14),
-                    _RoundIconButton(
-                        hero: false, icon: Icons.chevron_right_rounded, onTap: () => _move(1)),
-                  ],
-                ),
-              ),
+
+              // Confetti overlay
+              if (_showConfetti)
+                const Positioned.fill(child: IgnorePointer(child: ConfettiOverlay())),
             ],
           ),
         ),
@@ -154,10 +212,18 @@ class _GarageScreenState extends State<GarageScreen> {
 
   Widget _coinBadge() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: AppTheme.coinGold,
-        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+            colors: [Color(0xFFFFD93D), Color(0xFFFFA500)]),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.coinGold.withValues(alpha: 0.5),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -165,8 +231,10 @@ class _GarageScreenState extends State<GarageScreen> {
               color: Colors.white, size: 18),
           const SizedBox(width: 4),
           Text('${widget.save.coins}',
-              style:
-                  const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+              style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: Colors.white)),
         ],
       ),
     );
@@ -179,14 +247,15 @@ class _RoundIconButton extends StatelessWidget {
     required this.onTap,
     this.hero = true,
   });
+
   final IconData icon;
   final VoidCallback onTap;
   final bool hero;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
+    return PressableButton(
+      onPressed: onTap,
       child: Container(
         width: 46,
         height: 46,
@@ -201,7 +270,7 @@ class _RoundIconButton extends StatelessWidget {
   }
 }
 
-class _CarCard extends StatelessWidget {
+class _CarCard extends StatefulWidget {
   const _CarCard({
     required this.car,
     required this.owned,
@@ -217,110 +286,302 @@ class _CarCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_CarCard> createState() => _CarCardState();
+}
+
+class _CarCardState extends State<_CarCard>
+    with SingleTickerProviderStateMixin {
+  // Rotating glow border for selected car
+  late final AnimationController _glowCtrl = AnimationController(
+      vsync: this, duration: const Duration(seconds: 2))
+    ..repeat();
+
+  @override
+  void dispose() {
+    _glowCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final car = widget.car;
     final dark = darken(car.bodyColor, .3);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-              color: selected ? AppTheme.niceGreen : Colors.transparent,
-              width: 3),
-          boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 6)),
-          ],
+    final cardBg = lighten(car.bodyColor, 0.55);
+
+    Widget card = Container(
+      decoration: BoxDecoration(
+        // Tinted background based on car color
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, cardBg.withValues(alpha: 0.5)],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              car.name,
-              style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: dark == Colors.white ? AppTheme.inkDark : dark),
-            ),
-            const SizedBox(height: 10),
-            Bouncy(
-              child: Container(
-                width: 220,
-                height: 120,
-                decoration: BoxDecoration(color: Colors.black12,
-                    borderRadius: BorderRadius.circular(20)),
-                child: CustomPaint(
-                  size: const Size(220, 120),
-                  painter: CarPreviewPainter(car),
+        borderRadius: BorderRadius.circular(24),
+        border: widget.selected
+            ? null
+            : Border.all(color: Colors.transparent, width: 3),
+        boxShadow: [
+          BoxShadow(
+            color: widget.selected
+                ? car.bodyColor.withValues(alpha: 0.4)
+                : Colors.black12,
+            blurRadius: widget.selected ? 18 : 10,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Left Side: Name + Car Preview + Select/Buy Button
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    car.name,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: dark == Colors.white ? AppTheme.inkDark : dark,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Car preview with color glow shadow
+                  Bouncy(
+                    child: Stack(
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                        // Color shadow ellipse
+                        Container(
+                          width: 170,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(50),
+                            boxShadow: [
+                              BoxShadow(
+                                color: car.bodyColor.withValues(alpha: 0.5),
+                                blurRadius: 16,
+                                spreadRadius: 4,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: 190,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: Colors.black12,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: CustomPaint(
+                            size: const Size(190, 100),
+                            painter: CarPreviewPainter(car),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Select / Buy Button
+                  PressableButton(
+                    onPressed: widget.onTap,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 9),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: widget.selected
+                              ? [AppTheme.niceGreen, const Color(0xFF34B362)]
+                              : widget.owned
+                                  ? [AppTheme.niceBlue, const Color(0xFF3A7FD5)]
+                                  : widget.coins >= car.price
+                                      ? [AppTheme.coinGold, const Color(0xFFF5A623)]
+                                      : [Colors.grey.shade400, Colors.grey.shade500],
+                        ),
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (widget.selected
+                                    ? AppTheme.niceGreen
+                                    : widget.owned
+                                        ? AppTheme.niceBlue
+                                        : AppTheme.coinGold)
+                                .withValues(alpha: 0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        widget.selected
+                            ? 'SELECTED ✓'
+                            : widget.owned
+                                ? 'SELECT'
+                                : 'BUY • ${car.price}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(width: 24),
+
+              // Soft vertical divider
+              Container(
+                width: 1.5,
+                height: 160,
+                color: Colors.black.withValues(alpha: 0.08),
+              ),
+
+              const SizedBox(width: 20),
+
+              // Right Side: Car Description + Stat Bars
+              SizedBox(
+                width: 240,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      car.description,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.inkDark,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Colored stat bars
+                    _StatRow(
+                        label: 'SPEED',
+                        value: car.topSpeed / 76,
+                        color: AppTheme.niceGreen),
+                    const SizedBox(height: 6),
+                    _StatRow(
+                        label: 'GRIP',
+                        value: car.handling / 3.25,
+                        color: AppTheme.niceBlue),
+                    const SizedBox(height: 6),
+                    _StatRow(
+                        label: 'NITRO',
+                        value: (car.boostPower - 1.2) / 0.6,
+                        color: Colors.cyanAccent.shade700),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(car.description,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 13, color: AppTheme.inkDark)),
-            ),
-            const SizedBox(height: 10),
-            _StatRow(label: 'SPEED', value: car.topSpeed / 76),
-            _StatRow(label: 'GRIP', value: car.handling / 3.25),
-            _StatRow(label: 'NITRO', value: (car.boostPower - 1.2) / 0.6),
-            const SizedBox(height: 12),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: selected
-                    ? AppTheme.niceGreen
-                    : owned
-                        ? AppTheme.niceBlue
-                        : coins >= car.price
-                            ? AppTheme.coinGold
-                            : Colors.grey.shade400,
-              ),
-              onPressed: onTap,
-              child: Text(
-                selected
-                    ? 'SELECTED ✓'
-                    : owned
-                        ? 'SELECT'
-                        : 'BUY • ${car.price}',
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+
+    // Animated glowing border for selected car
+    if (widget.selected) {
+      card = AnimatedBuilder(
+        animation: _glowCtrl,
+        builder: (_, child) {
+          final t = _glowCtrl.value;
+          // Cycle through 3 glow colors
+          final colors = [
+            AppTheme.niceGreen,
+            Colors.cyanAccent.shade400,
+            AppTheme.coinGold,
+          ];
+          final idx = (t * 3).floor() % 3;
+          final frac = (t * 3) - idx.toDouble();
+          final glowColor = Color.lerp(colors[idx], colors[(idx + 1) % 3], frac)!;
+
+          return Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: [
+                BoxShadow(
+                  color: glowColor.withValues(alpha: 0.6),
+                  blurRadius: 16,
+                  spreadRadius: 2,
+                ),
+              ],
+              gradient: LinearGradient(
+                begin: Alignment(math.cos(t * 2 * math.pi),
+                    math.sin(t * 2 * math.pi)),
+                end: Alignment(-math.cos(t * 2 * math.pi),
+                    -math.sin(t * 2 * math.pi)),
+                colors: [
+                  glowColor,
+                  glowColor.withValues(alpha: 0.4),
+                ],
+              ),
+            ),
+            padding: const EdgeInsets.all(3),
+            child: child,
+          );
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(23),
+          child: card,
+        ),
+      );
+    }
+
+    return card;
   }
 }
 
 class _StatRow extends StatelessWidget {
-  const _StatRow({required this.label, required this.value});
+  const _StatRow({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
   final String label;
   final double value;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       child: Row(
         children: [
           SizedBox(
-              width: 48,
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black45))),
+            width: 48,
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black45)),
+          ),
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: value.clamp(0, 1),
-                color: AppTheme.nicePink,
-                backgroundColor: Colors.black12,
-                minHeight: 8,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: value.clamp(0, 1)),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+              builder: (_, v, __) => ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: v,
+                  color: color,
+                  backgroundColor: Colors.black12,
+                  minHeight: 8,
+                ),
               ),
             ),
           ),

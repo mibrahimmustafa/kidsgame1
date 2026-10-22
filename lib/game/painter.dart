@@ -357,19 +357,75 @@ class RacePainter extends CustomPainter {
   }
 
   void _drawCoin(Canvas c, Offset p, double unitPx, double phase) {
-    final wob = math.cos(phase); // -1..1
-    final halfW = unitPx * 0.34 * wob.abs().clamp(0.2, 1);
-    final r = Rect.fromCenter(center: p, width: halfW * 2, height: unitPx * 0.62);
-    c.drawOval(r, _fill(const Color(0xFFFFC93C)));
+    final wob = math.cos(phase * 1.5);
+    final spinScale = wob.abs().clamp(0.42, 1.0);
+    final coinRadius = unitPx * 0.52;
+    final halfW = coinRadius * spinScale;
+    final halfH = coinRadius;
+
+    // 1. Warm golden aura / glow - makes the coin pop on any track color
+    final pulse = 0.5 + 0.5 * math.sin(phase * 3);
     c.drawOval(
-        Rect.fromCenter(
-            center: p, width: halfW * 1.4, height: unitPx * 0.44),
-        _fill(const Color(0xFFFFE9A3)));
+      Rect.fromCenter(
+        center: p,
+        width: (halfW + 4.5) * 2,
+        height: (halfH + 4.5) * 2,
+      ),
+      _fill(const Color(0xFFFFD54F), alpha: 0.32 + pulse * 0.16),
+    );
+
+    // 2. Road drop shadow under coin
+    c.drawOval(
+      Rect.fromCenter(
+        center: p.translate(0, halfH * 0.95),
+        width: halfW * 2.1,
+        height: unitPx * 0.22,
+      ),
+      _fill(Colors.black38),
+    );
+
+    // 3. Dark amber/gold outer rim & stroke for sharp contrast against yellow/sand tracks
+    final outerRect = Rect.fromCenter(center: p, width: halfW * 2, height: halfH * 2);
+    c.drawOval(outerRect, _fill(const Color(0xFFC77700)));
+    c.drawOval(outerRect, _stroke(const Color(0xFF7A3E00), 2.2));
+
+    // 4. Vibrant gold coin face
+    final faceRect = Rect.fromCenter(
+      center: p,
+      width: (halfW - 2.2).clamp(1.0, 100.0) * 2,
+      height: (halfH - 2.2) * 2,
+    );
+    c.drawOval(faceRect, _fill(const Color(0xFFFFD700)));
+
+    // 5. Inner embossed rim
+    if (halfW > 5.0) {
+      final innerRingRect = Rect.fromCenter(
+        center: p,
+        width: (halfW - 4.5).clamp(1.0, 100.0) * 2,
+        height: (halfH - 4.5) * 2,
+      );
+      c.drawOval(innerRingRect, _stroke(const Color(0xFFE69A00), 1.4));
+      c.drawOval(innerRingRect, _fill(const Color(0xFFFFE66D)));
+
+      // 6. Embossed center mark
+      final markRect = Rect.fromCenter(
+        center: p,
+        width: halfW * 0.32,
+        height: halfH * 0.58,
+      );
+      c.drawRRect(
+        RRect.fromRectAndRadius(markRect, const Radius.circular(2)),
+        _fill(const Color(0xFFE69A00)),
+      );
+    }
+
+    // 7. Glossy specular glint
     final sheen = Rect.fromCenter(
-        center: p.translate(-halfW * 0.3, -unitPx * 0.1),
-        width: halfW * 0.4,
-        height: unitPx * 0.36);
-    c.drawOval(sheen, _fill(const Color(0xFFFFFFFF), alpha: 0.7));
+      center: p.translate(-halfW * 0.32, -halfH * 0.32),
+      width: halfW * 0.45,
+      height: halfH * 0.45,
+    );
+    c.drawOval(sheen, _fill(Colors.white, alpha: 0.85));
   }
 
   void _drawStar(Canvas c, Offset center, double radius, double phase) {
