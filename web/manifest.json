@@ -1,6 +1,6 @@
 {
-    "name": "speedy_stars",
-    "short_name": "speedy_stars",
+    "name": "Speedy Car",
+    "short_name": "Speedy Car",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
