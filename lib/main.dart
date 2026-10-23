@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -14,16 +16,23 @@ import 'screens/result_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // A kids' game ships portrait, distraction-free, no network.
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  // Configure orientation and immersive mode safely
+  try {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  } catch (e) {
+    debugPrint('SystemChrome init skipped: $e');
+  }
 
+  // Load save data safely
   final save = await GameSave.load();
   AudioHub.instance.attachSave(save);
-  await AudioHub.instance.init();
+
+  // Initialize audio in the background — NEVER block runApp
+  unawaited(AudioHub.instance.init());
 
   runApp(SpeedyStarsApp(save: save));
 }

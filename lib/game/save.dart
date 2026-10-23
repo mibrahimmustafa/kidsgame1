@@ -9,7 +9,7 @@ import 'models.dart';
 class GameSave {
   GameSave._(this._prefs, Map<String, dynamic> data) : _data = data;
 
-  final SharedPreferences _prefs;
+  final SharedPreferences? _prefs;
   Map<String, dynamic> _data;
   static const _key = 'speedy_stars_save_v1';
 
@@ -17,14 +17,16 @@ class GameSave {
   static const int defaultUnlockedCount = 3;
 
   static Future<GameSave> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
-    Map<String, dynamic> data;
+    SharedPreferences? prefs;
+    Map<String, dynamic> data = {};
     try {
-      data = raw == null
-          ? {}
-          : (jsonDecode(raw) as Map<String, dynamic>).cast<String, dynamic>();
+      prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_key);
+      if (raw != null) {
+        data = (jsonDecode(raw) as Map<String, dynamic>).cast<String, dynamic>();
+      }
     } catch (_) {
+      // In-memory fallback if storage is inaccessible
       data = {};
     }
     // Fill defaults for a brand new player.
@@ -191,7 +193,7 @@ class GameSave {
 
   Future<void> _persist() async {
     try {
-      await _prefs.setString(_key, jsonEncode(_encode(_data)));
+      await _prefs?.setString(_key, jsonEncode(_encode(_data)));
     } catch (_) {
       // Save failures must never crash a kids' game.
     }

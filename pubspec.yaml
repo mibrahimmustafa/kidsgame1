@@ -3,7 +3,7 @@ description: >-
   Speedy Stars — a kid-safe, high-HD arcade car racing game for Android
   (ages 7+). All art is procedural vector; all audio is generated.
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: '>=3.5.0 <4.0.0'

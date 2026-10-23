@@ -33,11 +33,15 @@ class AudioHub {
     try {
       for (var i = 0; i < poolSize; i++) {
         final p = AudioPlayer();
-        await p.setPlayerMode(PlayerMode.lowLatency);
+        try {
+          await p.setPlayerMode(PlayerMode.lowLatency);
+        } catch (_) {}
         _pool.add(p);
       }
       final m = AudioPlayer();
-      unawaited(m.setReleaseMode(ReleaseMode.loop));
+      try {
+        unawaited(m.setReleaseMode(ReleaseMode.loop));
+      } catch (_) {}
       _musicPlayer = m;
     } catch (e) {
       debugPrint('AudioHub init skipped: $e');

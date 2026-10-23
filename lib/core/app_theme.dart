@@ -151,22 +151,27 @@ class AppTheme {
     final base =
         ColorScheme.fromSeed(seedColor: niceOrange, brightness: Brightness.light);
 
-    final fredoka = GoogleFonts.fredokaTextTheme().copyWith(
-      headlineLarge: GoogleFonts.fredoka(
-          fontSize: 44, fontWeight: FontWeight.w600, letterSpacing: 1.5),
-      headlineMedium: GoogleFonts.fredoka(
-          fontSize: 30, fontWeight: FontWeight.w600, letterSpacing: 1.0),
-      titleLarge: GoogleFonts.fredoka(
-          fontSize: 22, fontWeight: FontWeight.w600),
-    );
+    TextTheme merged;
+    try {
+      final fredoka = GoogleFonts.fredokaTextTheme().copyWith(
+        headlineLarge: GoogleFonts.fredoka(
+            fontSize: 44, fontWeight: FontWeight.w600, letterSpacing: 1.5),
+        headlineMedium: GoogleFonts.fredoka(
+            fontSize: 30, fontWeight: FontWeight.w600, letterSpacing: 1.0),
+        titleLarge: GoogleFonts.fredoka(
+            fontSize: 22, fontWeight: FontWeight.w600),
+      );
 
-    final nunito = GoogleFonts.nunitoTextTheme();
+      final nunito = GoogleFonts.nunitoTextTheme();
 
-    final merged = nunito.copyWith(
-      headlineLarge: fredoka.headlineLarge,
-      headlineMedium: fredoka.headlineMedium,
-      titleLarge: fredoka.titleLarge,
-    );
+      merged = nunito.copyWith(
+        headlineLarge: fredoka.headlineLarge,
+        headlineMedium: fredoka.headlineMedium,
+        titleLarge: fredoka.titleLarge,
+      );
+    } catch (_) {
+      merged = ThemeData.light().textTheme;
+    }
 
     return ThemeData.light(useMaterial3: true).copyWith(
       colorScheme: base.copyWith(primary: niceOrange, secondary: niceBlue),
